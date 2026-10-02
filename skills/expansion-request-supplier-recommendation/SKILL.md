@@ -1,3 +1,8 @@
+---
+name: expansion-request-supplier-recommendation
+description: Process Expansion Request business events that are ready for supplier recommendation, run the Dataverse recommendation step, and post the required Teams approval gate before Vendor Award finalization.
+---
+
 # Expansion Request Supplier Recommendation
 
 ## Purpose

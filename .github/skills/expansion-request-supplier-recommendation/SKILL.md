@@ -1,6 +1,6 @@
 ---
 name: expansion-request-supplier-recommendation
-description: Process Expansion Request business events that are ready for supplier recommendation, run the Dataverse recommendation step, and post the required Teams approval gate before Vendor Award finalization.
+description: Use when an event has eventType ExpansionRequest.ReadyForSupplierRecommendation. Processes the Expansion Request supplier recommendation, runs the Dataverse recommendation step, and posts the required Teams approval gate before Vendor Award finalization.
 ---
 
 # Expansion Request Supplier Recommendation
@@ -55,10 +55,11 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 2. Confirm the request exists.
 3. Confirm the request is ready for supplier recommendation.
 4. Run the Dataverse skill `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`.
-5. Confirm the supplier recommendation step succeeded.
-6. Capture the recommended supplier, award amount if available, recommendation rationale, and proposed Vendor Award identifier if available.
-7. Post a Teams approval request using Work IQ.
-8. Stop after the Teams approval request is posted. Do not finalize the Vendor Award.
+5. Treat a response such as `Skill updated successfully`, `acknowledged`, or `workflow initiated` as an intermediate acknowledgement only. It is not completion.
+6. Confirm the supplier recommendation step was accepted or succeeded.
+7. Capture the recommended supplier, award amount if available, recommendation rationale, and proposed Vendor Award identifier if available.
+8. Post a Teams approval request using Work IQ.
+9. Stop after the Teams approval request is posted. Do not monitor for finalization and do not finalize the Vendor Award.
 
 ## Approval gate rule
 
@@ -67,6 +68,8 @@ Teams approval is required before Vendor Award finalization. Posting the Teams a
 Do not wait for finalized Vendor Award records before posting the approval. If the Vendor Award identifier, recommended supplier, award amount, or rationale are not available yet, include `Pending` or `Not available yet` for those fields and still post the Teams approval request.
 
 The process is not complete until the Teams approval request has been posted or the Teams post fails with a clear error.
+
+Do not ask the user whether to monitor for recommendation results or proceed to finalization. The correct next step after the Dataverse recommendation skill is to post the Teams approval request and stop.
 
 ## Teams approval destination
 
@@ -87,6 +90,8 @@ Before posting, resolve the Team ID and Channel ID. If exactly one matching team
 ## Safety rules
 
 - Do not finalize the Vendor Award.
+- Do not offer to finalize the Vendor Award.
+- Do not treat `Skill updated successfully` as the final outcome.
 - Do not create duplicate Vendor Awards if one already exists for the request.
 - Do not post to Teams if the team or channel is ambiguous.
 - Do not claim completion unless the Dataverse recommendation step and Teams post both succeeded.

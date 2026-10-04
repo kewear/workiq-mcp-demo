@@ -13,11 +13,11 @@ When this skill is selected, it is acceptable to briefly confirm that the skill 
 Found skill: expansion-request-supplier-recommendation. I will process Expansion Request <requestNumber>, request human approval in Teams, wait for the approval decision, and then complete or reject the award.
 ```
 
-That acknowledgement is not a valid final response. Do not return it as the whole result. Continue immediately to the supplier recommendation Custom API, then call `Human_In_the_loop_approval`.
+That acknowledgement is not a valid final response. Do not return it as the whole result. Continue immediately to discovering/invoking the supplier recommendation business skill, then call `Human_In_the_loop_approval`.
 
 Do not start by saying that you will search for Work IQ paths. Skill selection has already happened.
 
-If the agent starts by saying it will discover endpoints, trigger a recommend-suppliers action, update status, monitor for records, or proceed to finalize later, that is the wrong flow. The correct flow is to follow this GitHub process skill, invoke the supplier recommendation Custom API, call `Human_In_the_loop_approval`, and only then finalize on `Approve`.
+If the agent starts by saying it will update status, monitor for records, or proceed to finalize later, that is the wrong flow. The correct flow is to follow this GitHub process skill, discover and invoke the supplier recommendation business skill by name, call `Human_In_the_loop_approval`, and only then finalize on `Approve` if a confirmed finalization business skill/tool is exposed.
 
 ## Purpose
 
@@ -60,35 +60,29 @@ Use Work IQ MCP to invoke business skills only:
 - Invoke the supplier recommendation business skill: `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
 - After Teams approval, invoke the business skill that finalizes or awards the vendor. If the exact logical name is not already known, discover the available business skills and select the one whose purpose is to finalize or award the approved Vendor Award.
 
-### Executable business skill paths
+### Business skill discovery and execution
 
-The Business Applications `/skills/{skillName}` resource is metadata only. Do not try to execute a business skill by fetching or updating `/businessapps/environments/{environmentId}/skills/{skillName}`.
+Business skills are discoverable by name. Search for the business skill display names and use only the executable tool/action surface returned by the current run.
 
-Invoke the business skills as Dataverse Custom APIs through Work IQ MCP `do_action`:
+Supplier recommendation business skill names to search for:
 
-- Supplier recommendation action URL:
-  `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
-- Award finalization action URL:
-  `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award`
+- `Recommend Supplier and Initiate Vendor Award`
+- `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
 
-Before invoking either Custom API, call `get_schema` once on the exact Custom API action URL with `operationType: "action"` to confirm the request body shape and parameter casing. Then call `do_action` on that same Custom API action URL.
+Award finalization business skill names to search for after approval:
 
-For supplier recommendation, the request body must include the event's `requestNumber` and a short business description. Use schema-confirmed field names. If the schema exposes compatible names, use:
+- `Finalize Vendor Award`
+- `cr2d6_skill_finalize_vendor_award`
 
-```json
-{
-  "RequestNumber": "EXP-2026-004",
-  "Description": "Recommend a supplier and initiate the Vendor Award for Expansion Request EXP-2026-004."
-}
-```
+Do not assume business skills are Dataverse Custom APIs. Do not invent or call `/customapis/...` paths.
 
-If the schema uses different casing, preserve the schema-confirmed casing. Do not omit the description if the schema requires it.
+If discovery returns only a metadata path such as `/businessapps/environments/{environmentId}/skills/{skillName}` with `fetch`/`update`/`delete` but no executable action, do not treat that as execution. Continue searching for an executable action/tool for the same skill name.
 
-For award finalization, invoke `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award` only after the Teams approval decision is `Approve`.
+To run a business skill, use only an executable action/tool path that is actually exposed in the current run. Valid executable surfaces include an attached workflow tool, a returned Business Applications action path, or another concrete action path returned by Work IQ discovery with an `action` operation.
 
 The award finalization business skill is approval-gated. It may be invoked only after the Work IQ Teams options response returns `Approve`. Never invoke the award finalization business skill while the decision is pending, missing, rejected, ambiguous, or failed.
 
-Do not use Work IQ `ask` to decide whether the GitHub process skill or finalization skill exists after approval. The approval decision is already the control signal. On `Approve`, call the exact finalization Custom API path above with Work IQ MCP `do_action`.
+After approval, finalize only through a confirmed executable finalization business skill/tool. If no finalization action is exposed, report that finalization cannot be completed in the connected environment.
 
 Do not report tool metadata as the business outcome. The business outcome must be one of: Teams approval requested, awarded after human approval, rejected by human approver, or a clear failure.
 
@@ -133,13 +127,13 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 1. Find the Expansion Request by `requestNumber`.
 2. Confirm the request exists.
 3. Confirm the request is ready for supplier recommendation.
-4. Invoke the Dataverse supplier recommendation Custom API through Work IQ MCP `do_action` at `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_recommend_supplier_and_initiate_vendor_award`.
+4. Discover and invoke the supplier recommendation business skill by name using an executable action/tool exposed in the current run. Do not invent a Custom API path.
 5. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
 6. After the supplier recommendation business skill acknowledgement, continue to the approval step. Fetch the Expansion Request and recommendation details again if tools are available, but do not skip approval if some generated details are incomplete.
 7. Capture the recommended supplier, the Expansion Request budgeted amount, recommendation rationale, and proposed Vendor Award identifier if available.
 8. Call the workflow tool `Human_In_the_loop_approval` to request human approval with `Approve` and `Reject` options.
 9. Wait for `Human_In_the_loop_approval` to return the selected option.
-10. If the decision is `Approve`, invoke the award finalization Custom API through Work IQ MCP `do_action` at `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award`, then confirm the Expansion Request or Vendor Award is awarded or completed.
+10. If the decision is `Approve`, discover and invoke the confirmed award finalization business skill/tool if it is exposed, then confirm the Expansion Request or Vendor Award is awarded or completed.
 11. If the decision is `Reject`, mark the supplier recommendation or Expansion Request as rejected and do not finalize the Vendor Award.
 12. Return the final outcome.
 
@@ -183,22 +177,12 @@ After calling `Human_In_the_loop_approval`, wait for the selected option that th
 If the selected option is `Approve`:
 
 1. Confirm the request is still eligible to be awarded.
-2. Call `get_schema` once on `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award` with `operationType: "action"` to confirm parameter casing.
-3. Call Work IQ MCP `do_action` on `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award`.
-4. Include the approved request number and approval decision in the request body using schema-confirmed field names. If the schema exposes compatible names, use:
-
-```json
-{
-  "RequestNumber": "EXP-2026-004",
-  "Decision": "Approve",
-  "Description": "Finalize the Vendor Award for approved Expansion Request EXP-2026-004."
-}
-```
-
-5. Do not use Work IQ `ask` or skill metadata fetch as a substitute for the finalization `do_action`.
-6. If the finalization Custom API call fails because the endpoint is not exposed, report that exact failure. Do not claim the award is finalized.
-7. Confirm the Expansion Request or Vendor Award is awarded, approved, or completed.
-8. Return status `Awarded after human approval`.
+2. Search for an executable finalization business skill/tool using the names `Finalize Vendor Award` and `cr2d6_skill_finalize_vendor_award`.
+3. Use only a confirmed executable action/tool exposed in this run. Do not invent a Custom API path.
+4. If only metadata is found and no executable finalization action/tool is exposed, report: `Approval received, but no executable finalization action is exposed in this environment.` Do not claim the award is finalized.
+5. If a finalization action/tool is exposed, invoke it with the approved request number and approval decision using its schema-confirmed field names.
+6. Confirm the Expansion Request or Vendor Award is awarded, approved, or completed.
+7. Return status `Awarded after human approval`.
 
 If the selected option is `Reject`:
 

@@ -29,16 +29,16 @@ This skill is not complete after the Dataverse business skill runs. The required
 
 1. Find the Expansion Request.
 2. Invoke the supplier recommendation business skill through the Work IQ MCP server.
-3. Call the Work IQ MCP Teams tool to post a message with options.
+3. Call the Work IQ MCP Teams post-with-options API to post an approval card with Approve and Reject buttons.
 4. Wait for the returned option if the workflow provides one.
 5. If the returned option is `Approve`, invoke the award finalization business skill through the Work IQ MCP server.
 6. If the returned option is `Reject`, mark the request or recommendation rejected and do not finalize the award.
 
 Do not send a final assistant response after step 2. After the supplier recommendation business skill is invoked, immediately proceed to the Work IQ Teams options call. A response that only says the supplier recommendation business skill succeeded is incomplete and must be treated as a failed run.
 
-The required Teams call must be a Work IQ MCP call that posts a Teams message with options. Do not substitute a plain status message, a Dataverse update, or a suggestion to fetch details later.
+The required Teams call must be the Work IQ MCP post-with-options API that renders Approve and Reject buttons in Teams. Do not substitute a plain Teams channel message, a Dataverse update, or a suggestion to fetch details later.
 
-After the supplier recommendation business skill returns, do not make any more Business Applications or Dataverse calls until the Work IQ Teams message has been posted. The next write call must be the Teams channel message create call.
+After the supplier recommendation business skill returns, do not make any more Business Applications or Dataverse calls until the Work IQ Teams post-with-options approval card has been posted. The next write call must be the Work IQ post-with-options call.
 
 Never end the run with any of these responses:
 
@@ -107,7 +107,7 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 5. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
 6. After the supplier recommendation business skill acknowledgement, continue to the Teams options step. Fetch the Expansion Request, supplier recommendation, and Vendor Award details again if tools are available, but do not skip Teams if those details are incomplete.
 7. Capture the recommended supplier, award amount if available, recommendation rationale, and proposed Vendor Award identifier if available.
-8. Use the Work IQ MCP server to post an actionable Teams message with options.
+8. Use the Work IQ MCP server to post an actionable Teams approval card with options.
 9. Wait for the workflow to return the selected option from the Teams message.
 10. If the decision is `Approve`, invoke the award finalization business skill through the Work IQ MCP server, then confirm the Expansion Request or Vendor Award is awarded or completed.
 11. If the decision is `Reject`, mark the supplier recommendation or Expansion Request as rejected and do not finalize the Vendor Award.
@@ -115,28 +115,32 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 
 ## Teams approval message with options
 
-The Teams approval step is not an informational notification. It must be a Work IQ MCP message with options so the workflow can wait for and pass back the human decision.
+The Teams approval step is not an informational notification. It must be a Work IQ MCP post-with-options call so the workflow can wait for and pass back the human decision.
 
-The agent must call the Work IQ MCP server's Teams channel message capability before any final response.
+The agent must call the Work IQ MCP server's Teams post-with-options capability before any final response.
 
-Use this exact Work IQ Teams route:
+Use the Work IQ MCP API that posts a Teams message with selectable options. The posted card must render actual Teams buttons like this:
 
-1. `fetch` `/me/joinedTeams?$select=id,displayName` and select the exact team `Expansion Requests`.
-2. `fetch` `/teams/{teamId}/channels?$select=id,displayName` and select the exact channel `Requests`.
-3. `create_entity` with `parentUrl` `/teams/{teamId}/channels/{channelId}/messages`.
+- `Approve`
+- `Reject`
 
-Use this message body shape:
+The approval card title must be:
 
-```json
-{
-  "body": {
-    "contentType": "html",
-    "content": "<p>Approval requested for Expansion Request EXP-2026-004.</p><p><b>Recommended supplier:</b> ...</p><p><b>Award amount:</b> ...</p><p><b>Reason:</b> ...</p><p><b>Vendor Award:</b> ...</p><p>Please choose: <b>Approve</b> or <b>Reject</b>.</p>"
-  }
-}
+```text
+Supplier Recommendation Approval
 ```
 
-If the runtime exposes a Work IQ message-options field or adaptive-card field in the Teams message create schema, include the options `Approve` and `Reject`. If the schema does not expose such a field, still post the Teams channel message through Work IQ and return `Pending human approval`; do not keep searching other Dataverse or Business Applications paths.
+The approval card body must include:
+
+- Request Number
+- Recommended Supplier
+- Award Amount
+- Reason
+- Vendor Award Id
+
+The options must be exactly `Approve` and `Reject`.
+
+Do not use `create_entity` on `/teams/{teamId}/channels/{channelId}/messages` as a fallback. That creates a plain message without buttons and does not satisfy this skill.
 
 This call must be made through the Work IQ MCP server, not by asking the user to send a Teams message and not by using a non-Work-IQ connector. The visible evidence of success is that the run contains a Work IQ MCP call for Teams/channel messaging after the supplier recommendation business skill call.
 
@@ -154,12 +158,7 @@ The message must include:
 - Vendor Award identifier, if created, or `Pending`
 - Clear prompt asking the human approver to choose an action
 
-The options must be exactly:
-
-- `Approve`
-- `Reject`
-
-Before posting, resolve the Team ID and Channel ID using the exact fetch calls above. If exactly one matching team and channel is found, create the channel message. If the destination is ambiguous or not found, return an error and do not post.
+Before posting, resolve the Team ID and Channel ID if the post-with-options API requires IDs. If exactly one matching team and channel is found, post the approval card with options. If the destination is ambiguous or not found, return an error and do not post.
 
 ## Approval decision handling
 
@@ -191,7 +190,8 @@ If the Work IQ options message is posted but no decision is returned in the curr
 - Do not create, update, or publish skill definitions during this process.
 - Do not report tool metadata as the final business outcome.
 - Do not stop after the Dataverse business skill succeeds.
-- Do not make additional Business Applications or Dataverse calls after the supplier recommendation business skill until the Work IQ Teams message has been posted.
+- Do not make additional Business Applications or Dataverse calls after the supplier recommendation business skill until the Work IQ Teams post-with-options approval card has been posted.
+- Do not post a plain Teams channel message as a fallback.
 - Do not ask the user whether to post the Teams approval message. Posting it is mandatory.
 - Do not create duplicate Vendor Awards if one already exists for the request.
 - Do not post to Teams if the team or channel is ambiguous.

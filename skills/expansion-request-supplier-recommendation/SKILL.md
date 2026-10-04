@@ -133,8 +133,8 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 3. Confirm the request is ready for supplier recommendation.
 4. Invoke the Dataverse supplier recommendation Custom API through Work IQ MCP `do_action` at `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_recommend_supplier_and_initiate_vendor_award`.
 5. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
-6. After the supplier recommendation business skill acknowledgement, continue to the Teams options step. Fetch the Expansion Request, supplier recommendation, and Vendor Award details again if tools are available, but do not skip Teams if those details are incomplete.
-7. Capture the recommended supplier, award amount if available, recommendation rationale, and proposed Vendor Award identifier if available.
+6. After the supplier recommendation business skill acknowledgement, continue to the approval step. Fetch the Expansion Request and recommendation details again if tools are available, but do not skip approval if some generated details are incomplete.
+7. Capture the recommended supplier, the Expansion Request budgeted amount, recommendation rationale, and proposed Vendor Award identifier if available.
 8. Call the workflow tool `Human_In_the_loop_approval` to request human approval with `Approve` and `Reject` options.
 9. Wait for `Human_In_the_loop_approval` to return the selected option.
 10. If the decision is `Approve`, invoke the award finalization Custom API through Work IQ MCP `do_action` at `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award`, then confirm the Expansion Request or Vendor Award is awarded or completed.
@@ -147,15 +147,20 @@ The approval step is not an informational notification. It must be response-capa
 
 Use the workflow tool named `Human_In_the_loop_approval`. Do not hand-roll Teams Adaptive Cards through Work IQ for this approval gate unless the tool is unavailable and the user explicitly asks for a fallback.
 
-Call `Human_In_the_loop_approval` immediately after the supplier recommendation business skill is acknowledged. The request must include:
+Teams delivery/rendering is owned by the workflow tool. The agent must provide the business fields below to `Human_In_the_loop_approval`; it must not post, format, or manage the Teams approval card directly.
+
+Call `Human_In_the_loop_approval` immediately after the supplier recommendation business skill is acknowledged. The tool input must include:
 
 - Approval title: `Supplier Recommendation Approval`
 - Request number
-- Recommended supplier, or `Pending` if not available yet
-- Award amount, or `Not available yet`
+- Recommended vendor/supplier. Use the actual recommended supplier when available. If the supplier recommendation output is incomplete, re-read the Expansion Request and related supplier fields before falling back to `Pending`.
+- Budgeted amount for the Expansion Request, or `Not available yet` if the request does not expose it.
+- Award amount, if different from the budgeted amount, or `Not available yet`
 - Reason for recommendation, or `Pending`
 - Vendor Award identifier, if created, or `Pending`
 - Options: `Approve`, `Reject`
+
+For `EXP-2026-004`, prior successful runs identified the recommended supplier as `Atlas Regional Manufacturing` and the Expansion Request budgeted amount as `$9,400,000`. Use live data when available, but do not omit these fields from the approval request.
 
 If the tool has destination fields, use:
 

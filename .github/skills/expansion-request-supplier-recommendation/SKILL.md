@@ -208,7 +208,12 @@ Do NOT update the Expansion Request. Do NOT create Tasks. If the server-side pos
 
 The post-award plugin is NOT required for this demo and may be disabled in this environment. When the plugin is disabled, the Expansion Request stays as it was and no Legal, Procurement, or Finance tasks are created. That is expected. Do not query the Expansion Request or Tasks. Do not treat their absence as a failure. Never update the Expansion Request or create Tasks yourself to compensate.
 
-If the create or update fails, report the exact error text and stop. Do not retry automatically after an ambiguous response. Do not enable, disable, or edit plugin steps.
+Retry rules for the create (5a) and the update (5b):
+
+- If a write returns an explicit refusal such as `Access denied for POST path` or `Access denied for PATCH path`, nothing was written. Retry the exact same call immediately, up to 2 more times (3 attempts in total), with no other changes and no discovery or schema calls in between. This refusal has been seen to clear on its own.
+- If a write fails in an unclear way (a timeout, `InternalServerError`, or no response), do NOT retry blindly. Run ONE read query for an award on this request first. If an award exists, continue with it and do not create another. If none exists, retry the create once.
+- Never create more than one Vendor Award for the request. Check by query before any retry that follows an unclear failure.
+- If every attempt fails, report the exact error text of the last attempt, how many attempts you made, and stop. Do not enable, disable, or edit plugin steps. Do not switch to a different table or path to get around a refusal.
 ## Safety
 
 - Do not write anything before approval returns `Approve` for the current run.

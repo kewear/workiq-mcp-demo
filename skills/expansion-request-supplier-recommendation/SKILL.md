@@ -1,25 +1,27 @@
 ---
 name: expansion-request-supplier-recommendation
-description: Use when an event has eventType ExpansionRequest.ReadyForSupplierRecommendation. Processes the Expansion Request supplier recommendation, sends an actionable Work IQ Teams approval message with Approve and Reject options, waits for the decision returned by the workflow, and then completes or rejects the award.
+description: Use when an event has eventType ExpansionRequest.ReadyForSupplierRecommendation. Processes the Expansion Request supplier recommendation, calls Human_In_the_loop_approval with Approve and Reject options, waits for the decision returned by the workflow, and then completes or rejects the award.
 ---
 
 # Expansion Request Supplier Recommendation
 
-## Required skill-found acknowledgement
+## Skill selection rule
 
-When this skill is selected, the first assistant message must explicitly confirm that the skill was found and selected:
+When this skill is selected, it is acceptable to briefly confirm that the skill was found:
 
 ```text
 Found skill: expansion-request-supplier-recommendation. I will process Expansion Request <requestNumber>, request human approval in Teams, wait for the approval decision, and then complete or reject the award.
 ```
 
+That acknowledgement is not a valid final response. Do not return it as the whole result. Continue immediately to the supplier recommendation Custom API, then call `Human_In_the_loop_approval`.
+
 Do not start by saying that you will search for Work IQ paths. Skill selection has already happened.
 
-If the agent starts by saying it will discover endpoints, trigger a recommend-suppliers action, update status, monitor for records, or proceed to finalize later, that is the wrong flow. The correct flow is to follow this GitHub process skill and call Work IQ Teams with options immediately after the supplier recommendation business skill runs.
+If the agent starts by saying it will discover endpoints, trigger a recommend-suppliers action, update status, monitor for records, or proceed to finalize later, that is the wrong flow. The correct flow is to follow this GitHub process skill, invoke the supplier recommendation Custom API, call `Human_In_the_loop_approval`, and only then finalize on `Approve`.
 
 ## Purpose
 
-Process an Expansion Request business event when the request is ready for supplier recommendation. The skill recommends a supplier, initiates or proposes the Vendor Award process in Dataverse, sends a human approval message to Teams through Work IQ, waits for the returned approval decision, and then completes or rejects the award based on that decision.
+Process an Expansion Request business event when the request is ready for supplier recommendation. The skill recommends a supplier, initiates or proposes the Vendor Award process in Dataverse, calls the workflow tool `Human_In_the_loop_approval`, waits for the returned approval decision, and then completes or rejects the award based on that decision.
 
 Human approval is required before the Expansion Request or Vendor Award can be completed.
 
@@ -29,7 +31,7 @@ This skill is not complete after the Dataverse business skill runs. The required
 
 1. Find the Expansion Request.
 2. Invoke the supplier recommendation business skill through the Work IQ MCP server.
-3. Post a response-capable Teams approval through Work IQ so the human decision can be returned to the workflow.
+3. Call `Human_In_the_loop_approval` so the human decision can be returned to the workflow.
 4. Wait for the returned option if the workflow provides one.
 5. If the returned option is `Approve`, invoke the award finalization business skill through the Work IQ MCP server.
 6. If the returned option is `Reject`, mark the request or recommendation rejected and do not finalize the award.

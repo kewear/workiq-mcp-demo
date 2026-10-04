@@ -32,6 +32,10 @@ Read both at the start:
 
 Follow their instructions exactly. They define the scoring weights, the draft award fields, the commercial-term rules, and the verification steps.
 
+## Tables: original set only
+
+Use ONLY `aitour_expansionrequest` and `aitour_vendoraward` (plus `aitour_supplier`, invoices, and tasks). NEVER read from or write to any table whose name contains `cab` (for example `aitour_cabexpansionrequest` or `aitour_cabvendoraward`), even if Work IQ discovery, the Caldova Vendor Award app, or a search result lists them or calls them an alternate. If a lookup in the original tables finds nothing, report that. Do not fall back to a cab table.
+
 ## Verified schema (use these exact logical names)
 
 Never guess a column. Do not query `aitour_budgetedamount`; it does not exist.

@@ -45,6 +45,8 @@ Use Work IQ MCP to invoke business skills only:
 - Invoke the supplier recommendation business skill: `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
 - After Teams approval, invoke the business skill that finalizes or awards the vendor. If the exact logical name is not already known, discover the available business skills and select the one whose purpose is to finalize or award the approved Vendor Award.
 
+The award finalization business skill is approval-gated. It may be invoked only after the Work IQ Teams options response returns `Approve`. Never invoke the award finalization business skill while the decision is pending, missing, rejected, ambiguous, or failed.
+
 Do not report tool metadata as the business outcome. The business outcome must be one of: Teams approval requested, awarded after human approval, rejected by human approver, or a clear failure.
 
 ## Event handled
@@ -148,6 +150,8 @@ If the Work IQ options message is posted but no decision is returned in the curr
 ## Safety rules
 
 - Do not finalize the Vendor Award before the human selects `Approve`.
+- Do not invoke the award finalization business skill before the human selects `Approve`.
+- Do not invoke the award finalization business skill when the human selects `Reject`.
 - Do not complete the Expansion Request before the human selects `Approve`.
 - Do not offer to bypass approval.
 - Do not create, update, or publish skill definitions during this process.

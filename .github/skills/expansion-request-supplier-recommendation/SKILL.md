@@ -44,7 +44,24 @@ Never guess a column. Do not query `aitour_budgetedamount`; it does not exist.
 
 `aitour_vendoraward`: `aitour_awardnumber` (format VA-2026-###), `aitour_name`, `aitour_scope`, `aitour_expansionrequestid`, `aitour_selectedsupplierid`, `aitour_awardamount`, `aitour_awarddate`, `aitour_effectivedate`, `aitour_awardstatus` (100000001 = Awarded).
 
-For any other table or column (suppliers, invoices, invoice line items, the Draft status value, tasks), call `get_schema` first and use only what it returns.
+`aitour_supplier`: `aitour_supplierid`, `aitour_name`, `aitour_suppliercode`, `aitour_servicecategory` (a single category such as "Drug product manufacturing"), `aitour_vettedstatus` (BIT, 1 = vetted), `aitour_addressline1`, `aitour_addressline2` (city and region), `aitour_addressline3` (country).
+
+`aitour_invoice`: `aitour_invoiceid`, `aitour_invoicecode`, `aitour_supplierid` (lookup to supplier), `aitour_totalamount`, `aitour_invoicedate`, `aitour_supportreferences`.
+
+`aitour_invoicelineitem`: `aitour_invoicelineitemid`, `aitour_invoiceid` (lookup to invoice), `aitour_description`, `aitour_amount`, `aitour_expecteddecisionstate` (text: matched, variance, disputed, escalated), `aitour_issuecategory`, `aitour_linetype`.
+
+`aitour_vendoraward` choice values for `aitour_awardstatus`: Draft = 100000000, Awarded = 100000001, Processing_Complete = 100000002, Cancelled = 100000003. `aitour_awarddate` and `aitour_effectivedate` are date-only (use `YYYY-MM-DD`).
+
+The request's `aitour_servicecategory` can list several categories separated by semicolons. The first listed is the lead category. Match suppliers on the lead category.
+
+Working queries (verified):
+
+- Vetted suppliers: `SELECT aitour_supplierid, aitour_name, aitour_suppliercode, aitour_servicecategory, aitour_addressline1, aitour_addressline2, aitour_addressline3 FROM aitour_supplier WHERE aitour_vettedstatus = 1`
+- Commercial history for chosen suppliers: `SELECT i.aitour_supplierid, i.aitour_invoicecode, i.aitour_totalamount, l.aitour_expecteddecisionstate, l.aitour_description, l.aitour_amount FROM aitour_invoice i JOIN aitour_invoicelineitem l ON i.aitour_invoiceid = l.aitour_invoiceid WHERE i.aitour_supplierid IN ('<id1>','<id2>')`
+- Existing awards for the request: `SELECT aitour_awardnumber, aitour_awardstatus FROM aitour_vendoraward WHERE aitour_expansionrequestid = '<expansionRequestId>'`
+- Highest award number: `SELECT TOP 1 aitour_awardnumber FROM aitour_vendoraward ORDER BY aitour_awardnumber DESC`
+
+Do not call `get_schema` or sample-query these tables to discover column names. They are listed above. Use `get_schema` only for a table not listed here (for example Task).
 
 ## How to read and write data (verified)
 

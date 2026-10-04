@@ -25,13 +25,21 @@ Use the `D365AITour005` environment. Do not ask for environment details.
 
 ## Business skills used (read-only)
 
-Read both at the start:
+Read both at the start. Their names are:
 
-- `environments/D365AITour005/skills/Recommend%20Supplier%20and%20Initiate%20Vendor%20Award`
-- `environments/D365AITour005/skills/Finalize%20Vendor%20Award`
+- `Recommend Supplier and Initiate Vendor Award`
+- `Finalize Vendor Award`
+
+Do not hand-build paths. Call `search_paths` with the skill name, then `fetch` the path it returns, exactly as returned.
+
+If a live read is denied ("Access denied"), returns "not found", or fails for any reason, DO NOT STOP. Read the bundled fallback copy in this skill's folder instead and continue:
+
+- `references/recommend-supplier-and-initiate-vendor-award.md`
+- `references/finalize-vendor-award.md`
+
+The bundled copies have the same content as the Work IQ skills. Say in your final response which source you used. A denied or failed skill read is never a reason to end the run.
 
 Follow their instructions exactly. They define the scoring weights, the draft award fields, the commercial-term rules, and the verification steps.
-
 ## Tables: original set only
 
 Use ONLY `aitour_expansionrequest` and `aitour_vendoraward` (plus `aitour_supplier`, invoices, and tasks). NEVER read from or write to any table whose name contains `cab` (for example `aitour_cabexpansionrequest` or `aitour_cabvendoraward`), even if Work IQ discovery, the Caldova Vendor Award app, or a search result lists them or calls them an alternate. If a lookup in the original tables finds nothing, report that. Do not fall back to a cab table.
@@ -68,7 +76,7 @@ Do not call `get_schema` or sample-query these tables to discover column names. 
 READ with the environment query action. This is the only read method to use for the tables in this skill:
 
 - Tool: `do_action`
-- `actionUrl`: `environments/D365AITour005/query`
+- `actionUrl`: the query operation path returned by `search_paths` (it ends in `/query` and lists the `action` operation). Use it exactly as returned. It is usually `environments/D365AITour005/query`.
 - `jsonBody`: `{"querytext": "SELECT ... FROM aitour_expansionrequest WHERE aitour_requestnumber = '<requestNumber>'"}`
 
 Use Dataverse logical table and column names, one SELECT, and an explicit column list or `SELECT *`. No subqueries, DISTINCT, HAVING, CASE, or CAST. JOINs on equality are allowed.

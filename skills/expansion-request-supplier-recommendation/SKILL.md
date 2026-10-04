@@ -44,6 +44,17 @@ Follow their instructions exactly. They define the scoring weights, the draft aw
 
 Use ONLY `aitour_expansionrequest` and `aitour_vendoraward` (plus `aitour_supplier`, invoices, and tasks). NEVER read from or write to any table whose name contains `cab` (for example `aitour_cabexpansionrequest` or `aitour_cabvendoraward`), even if Work IQ discovery, the Caldova Vendor Award app, or a search result lists them or calls them an alternate. If a lookup in the original tables finds nothing, report that. Do not fall back to a cab table.
 
+## Table guard for step 1 (run this exact query)
+
+Step 1 MUST be this query, run through the query action, and you use only its result:
+
+`SELECT aitour_expansionrequestid, aitour_requestnumber, aitour_name, aitour_description, aitour_estimatedbudget, aitour_requeststatus, aitour_servicecategory, aitour_location, aitour_targetdate FROM aitour_expansionrequest WHERE aitour_requestnumber = '<requestNumber>'`
+
+Do not find the request table with `search_paths`, an app view, or a display name such as "Expansion Request". Searching for "expansion request" lists the cab tables first, and the Caldova Vendor Award app is wired to them.
+
+Expected result: one row with `aitour_requeststatus` = 100000001 (Ready_for_Recommendations) and no selected supplier.
+
+Self-check: if the request you see has status Draft, or already has a selected supplier, you are looking at a cab table. Discard that result, run the exact query above, and continue. This is not an inconsistency in the event and it is not a reason to stop. The event is correct.
 ## Verified schema (use these exact logical names)
 
 Never guess a column. Do not query `aitour_budgetedamount`; it does not exist.

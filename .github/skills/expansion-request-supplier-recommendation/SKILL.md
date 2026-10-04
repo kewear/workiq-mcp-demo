@@ -86,6 +86,8 @@ For award finalization, invoke `/businessapps/environments/D365AITour005/customa
 
 The award finalization business skill is approval-gated. It may be invoked only after the Work IQ Teams options response returns `Approve`. Never invoke the award finalization business skill while the decision is pending, missing, rejected, ambiguous, or failed.
 
+Do not use Work IQ `ask` to decide whether the GitHub process skill or finalization skill exists after approval. The approval decision is already the control signal. On `Approve`, call the exact finalization Custom API path above with Work IQ MCP `do_action`.
+
 Do not report tool metadata as the business outcome. The business outcome must be one of: Teams approval requested, awarded after human approval, rejected by human approver, or a clear failure.
 
 ## Event handled
@@ -174,9 +176,22 @@ After calling `Human_In_the_loop_approval`, wait for the selected option that th
 If the selected option is `Approve`:
 
 1. Confirm the request is still eligible to be awarded.
-2. Invoke the business skill that finalizes or awards the approved Vendor Award through the Work IQ MCP server.
-3. Confirm the Expansion Request or Vendor Award is awarded, approved, or completed.
-4. Return status `Awarded after human approval`.
+2. Call `get_schema` once on `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award` with `operationType: "action"` to confirm parameter casing.
+3. Call Work IQ MCP `do_action` on `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award`.
+4. Include the approved request number and approval decision in the request body using schema-confirmed field names. If the schema exposes compatible names, use:
+
+```json
+{
+  "RequestNumber": "EXP-2026-004",
+  "Decision": "Approve",
+  "Description": "Finalize the Vendor Award for approved Expansion Request EXP-2026-004."
+}
+```
+
+5. Do not use Work IQ `ask` or skill metadata fetch as a substitute for the finalization `do_action`.
+6. If the finalization Custom API call fails because the endpoint is not exposed, report that exact failure. Do not claim the award is finalized.
+7. Confirm the Expansion Request or Vendor Award is awarded, approved, or completed.
+8. Return status `Awarded after human approval`.
 
 If the selected option is `Reject`:
 

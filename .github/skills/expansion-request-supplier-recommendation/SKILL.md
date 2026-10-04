@@ -129,6 +129,14 @@ Pass these fields:
 - Options: `Approve`, `Reject`
 - If the tool has destination fields: Team `Expansion Requests`, Channel `Requests`
 
+Approval field formatting (the tool builds a Teams Adaptive Card from these strings; unsafe text makes Teams show "Card - access it on go.skype.com/cards.unsupported" and nobody can approve):
+
+- Every field is plain text on a single line. No double quotes, backslashes, line breaks, markdown, bullet characters, emoji, or angle brackets. Do not use quotation marks around names.
+- Amounts: digits with a dollar sign and commas only, for example `$8,930,000`. No words such as "approximately".
+- Vendor: the supplier name only.
+- Reason: ONE sentence, at most 180 characters, ending with a period. Put the proposed effective date in it in plain form, for example `Proposed effective date 2027-05-31.` Do not add the 95 percent explanation to the card.
+- Vendor Award Id: the single word `Pending`.
+- Mention risks such as a disputed line in your own final response, not in the card.
 The approval is the explicit selection of the supplier and the confirmation of the commercial terms. Wait for the returned decision. It returns `Approve` or `Reject`.
 
 If the tool is unavailable or fails, stop and report the failure. Do not post a plain Teams message and do not write anything. If no decision is returned in this execution, end with status `Pending human approval` and write nothing.

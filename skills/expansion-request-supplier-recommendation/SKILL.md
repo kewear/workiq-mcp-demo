@@ -158,6 +158,8 @@ Call `Human_In_the_loop_approval` immediately after the supplier recommendation 
 
 For `EXP-2026-004`, prior successful runs identified the recommended supplier as `Atlas Regional Manufacturing` and the Expansion Request budgeted amount as `$9,400,000`. Use live data when available, but do not omit these fields from the approval request.
 
+When reading the budgeted amount from Dataverse, use only schema-confirmed column logical names. Do not query `aitour_budgetedamount` unless the current table schema explicitly contains that column. If the schema does not expose a budget column, use the grounded value already returned by Work IQ context, or `Not available yet` if no grounded value is available. Do not fail the workflow solely because a guessed budget column is missing.
+
 If the tool has destination fields, use:
 
 - Team: `Expansion Requests`
@@ -204,6 +206,7 @@ If the Work IQ options message is posted but no decision is returned in the curr
 - Do not report tool metadata as the final business outcome.
 - Do not stop after the Dataverse business skill succeeds.
 - Do not make additional Business Applications or Dataverse calls after the supplier recommendation business skill until `Human_In_the_loop_approval` returns a decision or fails.
+- Do not query guessed Dataverse columns such as `aitour_budgetedamount`; use schema-confirmed columns only.
 - Do not post a plain Teams channel message.
 - Do not post a visual-only Adaptive Card with `Action.Submit` through normal Teams channel message creation.
 - Do not ask the user whether to call `Human_In_the_loop_approval`. Calling it is mandatory.

@@ -15,6 +15,8 @@ Found skill: expansion-request-supplier-recommendation. I will process Expansion
 
 Do not start by saying that you will search for Work IQ paths. Skill selection has already happened.
 
+If the agent starts by saying it will discover endpoints, trigger a recommend-suppliers action, update status, monitor for records, or proceed to finalize later, that is the wrong flow. The correct flow is to follow this GitHub process skill and call Work IQ Teams with options immediately after the supplier recommendation business skill runs.
+
 ## Purpose
 
 Process an Expansion Request business event when the request is ready for supplier recommendation. The skill recommends a supplier, initiates or proposes the Vendor Award process in Dataverse, sends a human approval message to Teams through Work IQ, waits for the returned approval decision, and then completes or rejects the award based on that decision.
@@ -35,6 +37,15 @@ This skill is not complete after the Dataverse business skill runs. The required
 Do not send a final assistant response after step 2. After the supplier recommendation business skill is invoked, immediately proceed to the Work IQ Teams options call. A response that only says the supplier recommendation business skill succeeded is incomplete and must be treated as a failed run.
 
 The required Teams call must be a Work IQ MCP call that posts a Teams message with options. Do not substitute a plain status message, a Dataverse update, or a suggestion to fetch details later.
+
+Never end the run with any of these responses:
+
+- "Want me to monitor for the award record?"
+- "Want me to proceed to run Finalize Vendor Award?"
+- "No new Vendor Award records created yet."
+- "Supplier recommendation initiated" without also posting the Teams approval options message.
+
+Those responses skipped the required Work IQ Teams approval call.
 
 ## Skill invocation rules
 
@@ -105,6 +116,8 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 The Teams approval step is not an informational notification. It must be a Work IQ MCP message with options so the workflow can wait for and pass back the human decision.
 
 The agent must call the Work IQ MCP server's Teams post-message-with-options capability before any final response. If the exact tool name differs, choose the Work IQ MCP tool whose purpose is to post a Teams message with selectable options.
+
+This call must be made through the Work IQ MCP server, not by asking the user to send a Teams message and not by using a non-Work-IQ connector. The visible evidence of success is that the run contains a Work IQ MCP call for Teams/channel messaging after the supplier recommendation business skill call.
 
 Use Work IQ to post the message to:
 

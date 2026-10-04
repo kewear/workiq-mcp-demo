@@ -1,235 +1,113 @@
 ---
 name: expansion-request-supplier-recommendation
-description: Use when an event has eventType ExpansionRequest.ReadyForSupplierRecommendation. Processes the Expansion Request supplier recommendation, calls Human_In_the_loop_approval with Approve and Reject options, waits for the decision returned by the workflow, and then completes or rejects the award.
+description: Use when eventType is ExpansionRequest.ReadyForSupplierRecommendation. Reads the two Business Skills as instructions, ranks suppliers, gets human approval through Human_In_the_loop_approval, then creates and finalizes the Vendor Award by following the Finalize Vendor Award skill.
 ---
 
 # Expansion Request Supplier Recommendation
 
-## Skill selection rule
+## Core principle
 
-When this skill is selected, it is acceptable to briefly confirm that the skill was found:
+Business skills are INSTRUCTIONS, not executable actions. They describe how to solve a problem. You carry out those instructions yourself using the data tools (query, create record, update record).
 
-```text
-Found skill: expansion-request-supplier-recommendation. I will process Expansion Request <requestNumber>, request human approval in Teams, wait for the approval decision, and then complete or reject the award.
-```
+- Read a business skill with `fetch` on its skill path. That returns its instructions.
+- NEVER call update, create, or delete on any `/skills/...` path. That overwrites the skill definition and destroys it.
+- The `fetch/update/delete` operations listed for a skill describe how to manage the skill document. They are not a way to run it.
+- Never look for an "execution surface" for a business skill. There isn't one, and none is needed.
 
-That acknowledgement is not a valid final response. Do not return it as the whole result. Continue immediately to discovering/invoking the supplier recommendation business skill, then call `Human_In_the_loop_approval`.
+## Do not stop early
 
-Do not search Work IQ for the GitHub process skill name. Skill selection has already happened. Work IQ discovery is only for Business Applications data, business skill surfaces, and record context.
+Keep working until the procedure reaches one of these end states: (a) step 4 after a Reject, (b) step 5c verification complete, (c) a tool error you report exactly, or (d) an eligibility or duplicate-award stop. Do not end your turn after discovery, after reading a skill, or after ranking suppliers. Do not close with an offer such as 'want me to proceed' or 'I can monitor'. The next required action after ranking is always the Human_In_the_loop_approval call.
 
-If the agent starts by saying it will update status, monitor for records, or proceed to finalize later, that is the wrong flow. The correct flow is to follow this GitHub process skill, discover the supplier recommendation business skill by name, use grounded recommendation data when execution is not exposed, call `Human_In_the_loop_approval`, and only then finalize on `Approve` if a confirmed finalization business skill/tool is exposed.
+## Environment
 
-## Purpose
+Use the `D365AITour005` environment. Do not ask for environment details.
 
-Process an Expansion Request business event when the request is ready for supplier recommendation. The skill recommends a supplier, initiates or proposes the Vendor Award process in Dataverse, calls the workflow tool `Human_In_the_loop_approval`, waits for the returned approval decision, and then completes or rejects the award based on that decision.
+## Business skills used (read-only)
 
-Human approval is required before the Expansion Request or Vendor Award can be completed.
+Read both at the start:
 
-## Non-negotiable execution checkpoints
+- `environments/D365AITour005/skills/Recommend%20Supplier%20and%20Initiate%20Vendor%20Award`
+- `environments/D365AITour005/skills/Finalize%20Vendor%20Award`
 
-This skill is not complete after business skill discovery or supplier recommendation. The required execution order is:
-
-1. Find the Expansion Request.
-2. Discover the supplier recommendation business skill by name and invoke it only if an executable action/tool is exposed.
-3. If only metadata is exposed, read grounded recommendation data from the Expansion Request and related context.
-4. Call `Human_In_the_loop_approval` so the human decision can be returned to the workflow.
-5. Wait for the returned option if the workflow provides one.
-6. If the returned option is `Approve`, invoke the award finalization business skill through the Work IQ MCP server only if an executable action/tool is exposed.
-7. If the returned option is `Reject`, mark the request or recommendation rejected and do not finalize the award.
-
-Do not send a final assistant response after skill discovery or recommendation lookup. A response that only says the supplier recommendation skill is metadata-only is incomplete when grounded recommendation data exists.
-
-The required approval call is `Human_In_the_loop_approval`. Do not substitute a plain Teams channel message, a visual-only Adaptive Card, a Dataverse update, or a suggestion to fetch details later.
-
-After grounded recommendation data is available, do not keep searching for alternate supplier-recommendation routes. Call `Human_In_the_loop_approval`.
-
-Never end the run with any of these responses:
-
-- "Want me to monitor for the award record?"
-- "Want me to proceed to run Finalize Vendor Award?"
-- "No new Vendor Award records created yet."
-- "Supplier recommendation initiated" without also calling `Human_In_the_loop_approval`.
-
-Those responses skipped the required human approval call.
-
-## Skill invocation rules
-
-Business skills are runtime actions. Do not create, edit, update, publish, or overwrite skill definitions as part of this process.
-
-Use Work IQ MCP to invoke business skills only:
-
-- Invoke the supplier recommendation business skill: `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
-- After `Human_In_the_loop_approval` returns `Approve`, invoke the business skill that finalizes or awards the vendor if an executable finalization action/tool is exposed.
-
-### Business skill discovery and execution
-
-Business skills are discoverable by name. Search for the business skill display names and use only the executable tool/action surface returned by the current run.
-
-Supplier recommendation business skill names to search for:
-
-- `Recommend Supplier and Initiate Vendor Award`
-- `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
-
-Award finalization business skill names to search for after approval:
-
-- `Finalize Vendor Award`
-- `cr2d6_skill_finalize_vendor_award`
-
-Do not assume business skills are Dataverse Custom APIs. Do not invent or call `/customapis/...` paths.
-
-If discovery returns only a metadata path such as `/businessapps/environments/{environmentId}/skills/{skillName}` with `fetch`/`update`/`delete` but no executable action, do not treat that as execution. Continue searching for an executable action/tool for the same skill name.
-
-To run a business skill, use only an executable action/tool path that is actually exposed in the current run. Valid executable surfaces include an attached workflow tool, a returned Business Applications action path, or another concrete action path returned by Work IQ discovery with an `action` operation.
-
-If the supplier recommendation business skill is not executable in the current run, but the Expansion Request already has grounded recommendation data, continue to human approval using that grounded data. Grounded recommendation data means an actual recommended/preferred supplier is available from Work IQ context or Dataverse data, not just a guess. Do not block approval solely because the supplier recommendation skill cannot be re-run.
-
-Metadata-only discovery is not a blocker by itself. If the supplier recommendation skill is visible only as metadata, perform a bounded lookup for the request's recommended/preferred supplier, budgeted amount, recommendation reason, and Vendor Award id. If a recommended/preferred supplier is grounded, proceed to `Human_In_the_loop_approval`.
-
-The award finalization business skill is approval-gated. It may be invoked only after `Human_In_the_loop_approval` returns `Approve`. Never invoke the award finalization business skill while the decision is pending, missing, rejected, ambiguous, or failed.
-
-After approval, finalize only through a confirmed executable finalization business skill/tool. If no finalization action is exposed, report that finalization cannot be completed in the connected environment.
-
-Do not report tool metadata as the business outcome. The business outcome must be one of: Teams approval requested, awarded after human approval, rejected by human approver, or a clear failure.
-
-## Event handled
-
-`ExpansionRequest.ReadyForSupplierRecommendation`
+Follow their instructions exactly. They define the scoring weights, the draft award fields, the commercial-term rules, and the verification steps.
 
 ## Inputs
 
-The event payload must include:
+The event must include `eventType`, `requestNumber`, and `status`. It may include `effectiveDate`.
 
-- `eventType`
-- `requestNumber`
-- `status`
+Proceed only when `eventType` is `ExpansionRequest.ReadyForSupplierRecommendation`, `status` is `Ready for supplier recommendation`, and `requestNumber` is present. Otherwise stop and explain why nothing was done.
 
-Example payload:
+## Procedure
 
-```json
-{
-  "eventType": "ExpansionRequest.ReadyForSupplierRecommendation",
-  "requestNumber": "EXP-2026-004",
-  "status": "Ready for supplier recommendation"
-}
-```
+### 1. Recommend (read-only, no writes)
 
-## Environment binding
+Follow the "Recommend suppliers" section of the Recommend Supplier and Initiate Vendor Award skill:
 
-Use the configured `D365AITour` Dataverse environment. Do not ask the user or event payload for the Dataverse environment. The event contains business context only. The skill owns the environment and tool binding.
+1. Query the Expansion Request by `requestNumber` (`aitour_expansionrequest`, column `aitour_requestnumber`). Confirm it exists and is ready for recommendation.
+2. Confirm no Vendor Award already exists for it (`aitour_vendoraward`, column `aitour_expansionrequestid`). If one exists, stop and report it. Do not create a duplicate.
+3. Query vetted suppliers matching the request's service category, then their invoices and invoice line items.
+4. Rank by the weights in the skill and choose the top supplier.
 
-## Eligibility checks
+### 2. Prepare the commercial terms (read-only)
 
-Proceed only when all of the following are true:
+Follow the "Collect commercial terms" section of the Finalize Vendor Award skill:
 
-- `eventType` equals `ExpansionRequest.ReadyForSupplierRecommendation`
-- `status` equals `Ready for supplier recommendation`
-- `requestNumber` is present
+- Proposed Award Amount: 95 percent of the Expansion Request estimated budget. Label it a suggestion. It must not exceed the estimated budget.
+- Effective Date: use `effectiveDate` from the event if present. Otherwise use the Expansion Request target date as the proposed date. Label it proposed.
+- Never derive Award Amount from supplier invoices.
 
-If any eligibility check fails, stop and return a concise explanation of why no action was taken.
+### 3. Human approval (required, fresh every run)
 
-## Business process
+Immediately call the attached tool `Human_In_the_loop_approval`. Do not construct Teams cards and do not use Work IQ Teams messages for approval.
 
-1. Find the Expansion Request by `requestNumber`.
-2. Confirm the request exists.
-3. Confirm the request is ready for supplier recommendation.
-4. Discover and invoke the supplier recommendation business skill by name using an executable action/tool exposed in the current run. Do not invent a Custom API path.
-5. If no executable supplier recommendation action/tool is exposed, read the Expansion Request and related recommendation context. If a grounded recommended/preferred supplier is already available, continue to approval using that data and note that the recommendation skill was not re-run.
-6. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
-7. After the supplier recommendation business skill acknowledgement or grounded recommendation lookup, continue to the approval step. Fetch the Expansion Request and recommendation details again if tools are available, but do not skip approval when a grounded recommended/preferred supplier and request context are available.
-8. Capture the recommended supplier, the Expansion Request budgeted amount, recommendation rationale, and proposed Vendor Award identifier if available.
-9. Call the workflow tool `Human_In_the_loop_approval` to request human approval with `Approve` and `Reject` options.
-10. Wait for `Human_In_the_loop_approval` to return the selected option.
-11. If the decision is `Approve`, discover and invoke the confirmed award finalization business skill/tool if it is exposed, then confirm the Expansion Request or Vendor Award is awarded or completed.
-12. If the decision is `Reject`, mark the supplier recommendation or Expansion Request as rejected and do not finalize the Vendor Award.
-13. Return the final outcome.
+A fresh approval is required for every event. Never reuse a prior approval from an earlier run, card, record, or transcript.
 
-## Human-in-the-loop approval
+Include in the approval request:
 
-The approval step is not an informational notification. It must be response-capable so the workflow can wait for and pass back the human decision.
-
-Use the workflow tool named `Human_In_the_loop_approval`. Do not hand-roll Teams Adaptive Cards through Work IQ for this approval gate unless the tool is unavailable and the user explicitly asks for a fallback.
-
-Teams delivery/rendering is owned by the workflow tool. The agent must provide the business fields below to `Human_In_the_loop_approval`; it must not post, format, or manage the Teams approval card directly.
-
-Call `Human_In_the_loop_approval` immediately after the supplier recommendation business skill is acknowledged. The tool input must include:
-
-- Approval title: `Supplier Recommendation Approval`
 - Request number
-- Recommended vendor/supplier. Use the actual recommended supplier when available. If the supplier recommendation output is incomplete, re-read the Expansion Request and related supplier fields before falling back to `Pending`.
-- Budgeted amount for the Expansion Request, or `Not available yet` if the request does not expose it.
-- Award amount, if different from the budgeted amount, or `Not available yet`
-- Reason for recommendation, or `Pending`
-- Vendor Award identifier, if created, or `Pending`
+- Recommended supplier
+- Estimated budget
+- Proposed award amount (labelled as a suggestion)
+- Proposed effective date (labelled as proposed)
+- Reason for recommendation
 - Options: `Approve`, `Reject`
 
-For `EXP-2026-004`, prior successful runs identified the recommended supplier as `Atlas Regional Manufacturing` and the Expansion Request budgeted amount as `$9,400,000`. Use live data when available, but do not omit these fields from the approval request.
+The approval is the explicit selection of the supplier AND the confirmation of the commercial terms. Wait for the returned decision.
 
-For `EXP-2026-004`, if live supplier recommendation execution is unavailable but Work IQ context still returns `Atlas Regional Manufacturing` as the recommended/preferred supplier, use that as grounded recommendation data and proceed to `Human_In_the_loop_approval`.
+### 4. If the decision is Reject
 
-When reading the budgeted amount from Dataverse, use only schema-confirmed column logical names. Do not query `aitour_budgetedamount` unless the current table schema explicitly contains that column. If the schema does not expose a budget column, use the grounded value already returned by Work IQ context, or `Not available yet` if no grounded value is available. Do not fail the workflow solely because a guessed budget column is missing.
+Stop. Make no writes. Report that the recommendation was rejected.
 
-If the tool has destination fields, use:
+### 5. If the decision is Approve
 
-- Team: `Expansion Requests`
-- Channel: `Requests`
+Do both steps yourself with the data tools, in this order:
 
-The approval tool must return one of:
+**5a. Create the Draft Vendor Award** (Recommend skill, "Create a draft Vendor Award"). Create one `aitour_vendoraward` record with the expansion request, the approved supplier, Award Status Draft, a name derived from the request name, a short scope derived from the request description, and the next available award number (query existing award numbers and add one to the highest). Leave Award Amount, Award Date, and Effective Date blank at creation. Use `get_schema` on the table first for exact column names and the Draft and Awarded choice values.
 
-- `Approve`
-- `Reject`
+**5b. Finalize** (Finalize skill, "Finalize the award"). Update ONLY that Vendor Award record:
 
-If `Human_In_the_loop_approval` is not available or fails, stop and report the failure clearly. Do not post a plain Teams message and do not finalize the award.
+- Award Amount: the approved amount
+- Effective Date: the approved date
+- Award Date: today
+- Award Status: Awarded
 
-## Approval decision handling
+Do NOT update the Expansion Request. Do NOT create Tasks. A server-side plugin does that in the same transaction: it marks the request Awarded, copies the supplier, and creates the Legal, Procurement, and Finance tasks.
 
-After calling `Human_In_the_loop_approval`, wait for the selected option that the workflow returns.
+**5c. Verify** (Finalize skill, "Verify the result"):
 
-If the selected option is `Approve`:
+1. The Vendor Award is Awarded with the correct amount and dates.
+2. The Expansion Request is Awarded and has the selected supplier.
+3. Exactly one open Task exists for each of Legal, Procurement, and Finance.
 
-1. Confirm the request is still eligible to be awarded.
-2. Search for an executable finalization business skill/tool using the names `Finalize Vendor Award` and `cr2d6_skill_finalize_vendor_award`.
-3. Use only a confirmed executable action/tool exposed in this run. Do not invent a Custom API path.
-4. If only metadata is found and no executable finalization action/tool is exposed, report: `Approval received, but no executable finalization action is exposed in this environment.` Do not claim the award is finalized.
-5. If a finalization action/tool is exposed, invoke it with the approved request number and approval decision using its schema-confirmed field names.
-6. Confirm the Expansion Request or Vendor Award is awarded, approved, or completed.
-7. Return status `Awarded after human approval`.
+If the update fails or the plugin rejects it, report the exact error. Do not retry automatically after an ambiguous response.
 
-If the selected option is `Reject`:
+## Safety
 
-1. Confirm the request exists.
-2. Mark the supplier recommendation or approval state as rejected using the available Dataverse action or record update.
-3. Do not finalize the Vendor Award.
-4. Return status `Rejected by human approver`.
+- Do not write anything before approval returns `Approve`.
+- Never modify, create, or delete a business skill.
+- Never create a second active Vendor Award for the same request.
+- Never claim success unless the writes succeeded and step 5c verified them.
 
-If `Human_In_the_loop_approval` is called but no decision is returned in the current workflow execution, return status `Pending human approval` and do not claim the award is complete.
+## Final response
 
-## Safety rules
-
-- Do not finalize the Vendor Award before the human selects `Approve`.
-- Do not invoke the award finalization business skill before the human selects `Approve`.
-- Do not invoke the award finalization business skill when the human selects `Reject`.
-- Do not complete the Expansion Request before the human selects `Approve`.
-- Do not offer to bypass approval.
-- Do not create, update, or publish skill definitions during this process.
-- Do not report tool metadata as the final business outcome.
-- Do not stop after metadata-only business skill discovery when grounded recommendation data exists.
-- Do not make unrelated Business Applications or Dataverse calls after grounded recommendation data is available; call `Human_In_the_loop_approval`.
-- Do not query guessed Dataverse columns such as `aitour_budgetedamount`; use schema-confirmed columns only.
-- Do not post a plain Teams channel message.
-- Do not post a visual-only Adaptive Card with `Action.Submit` through normal Teams channel message creation.
-- Do not ask the user whether to call `Human_In_the_loop_approval`. Calling it is mandatory.
-- Do not create duplicate Vendor Awards if one already exists for the request.
-- Do not post to Teams if the team or channel is ambiguous.
-- Do not claim completion unless the human approval decision has been received and processed.
-- If a tool call fails, report the failure clearly and stop.
-
-## Success response
-
-Return a short summary with:
-
-- Request number
-- Recommended supplier, or pending status
-- Human decision: `Approve`, `Reject`, or `Pending`
-- Vendor Award identifier, or pending status
-- Teams approval destination
-- Current status: `Awarded after human approval`, `Rejected by human approver`, or `Pending human approval`
+Short summary: request number, recommended supplier, approval decision, Vendor Award number and status, whether the three tasks exist, and current status. If something failed, say exactly what.

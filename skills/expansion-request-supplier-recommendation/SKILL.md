@@ -85,7 +85,27 @@ Example for step 1: `SELECT aitour_expansionrequestid, aitour_name, aitour_estim
 
 Do NOT use app-scoped table paths (anything under `environments/D365AITour005/apps/...`) to read these records. The Caldova Vendor Award app is wired to the cab tables, so that route leads to the wrong data. If a fetch returns no record data, use the query action above instead of switching to an app view.
 
-WRITE with `create_entity` and `update_entity` on the environment table path. Records are addressed as `environments/D365AITour005/tables/<logical table name>/records/<record id>` for update. Call `get_schema` on the table first for exact column names and choice values.
+WRITE with `create_entity` and `update_entity` (verified working format):
+
+- Create: `parentUrl` is `environments/D365AITour005/tables/<logical table name>/records`. The table path alone, without `/records`, is rejected.
+- Update: `entityUrl` is `environments/D365AITour005/tables/<logical table name>/records/<record id>`.
+- `jsonBody` is a JSON object using logical column names as keys.
+- LOOKUP columns must be an object, never a bare GUID and never `@odata.bind`. Use `{"relatedTable": "<logical table name>", "recordId": "<guid>"}`. A bare GUID string fails with `JsonReaderException: Unexpected character encountered while parsing value: d. Path '', line 0, position 0`. That error means you sent a lookup as a plain string.
+- Choice columns are the integer value, for example `100000000`. Date-only columns are `"YYYY-MM-DD"`. Decimals are plain numbers with no commas or dollar signs.
+
+Verified example, step 5a (create the Draft award):
+
+`create_entity` with `parentUrl` = `environments/D365AITour005/tables/aitour_vendoraward/records` and `jsonBody`:
+
+`{"aitour_name": "<request name> Award", "aitour_awardnumber": "VA-2026-016", "aitour_awardstatus": 100000000, "aitour_scope": "<short scope>", "aitour_expansionrequestid": {"relatedTable": "aitour_expansionrequest", "recordId": "<expansion request id>"}, "aitour_selectedsupplierid": {"relatedTable": "aitour_supplier", "recordId": "<supplier id>"}}`
+
+Verified example, step 5b (finalize that record):
+
+`update_entity` with `entityUrl` = `environments/D365AITour005/tables/aitour_vendoraward/records/<vendor award id>` and `jsonBody`:
+
+`{"aitour_awardamount": 8930000, "aitour_effectivedate": "2027-05-31", "aitour_awarddate": "<today YYYY-MM-DD>", "aitour_awardstatus": 100000001}`
+
+The create call returns the new record id. Use it for step 5b. Do not guess the award number: query the highest existing `aitour_awardnumber` and add one.
 ## Inputs
 
 The event must include `eventType`, `requestNumber`, and `status`. It may include `effectiveDate`.

@@ -15,15 +15,6 @@ Business skills are INSTRUCTIONS, not executable actions. They describe how to s
 - Never look for an "execution surface" for a business skill. There isn't one, and none is needed.
 - Do not invent `/customapis/...` paths.
 
-## Time budget (hard limit)
-
-The whole run, including the time the human takes to approve, is cut off by the platform after about 6 minutes, and a cut-off run fails with an InternalServerError. Finish well inside that. Rules:
-
-- Issue independent tool calls together in the same turn. Never run them one at a time.
-- Keep every message between tool calls to one short sentence. Do not explain your plan.
-- Do all read queries before the approval call. After approval you do exactly three things: create the Draft, update it to Awarded, and run the single read-back query.
-- Do not re-read anything you already have. Do not re-check the duplicate or the award number after approval.
-- Never run extra verification beyond step 5c.
 ## Do not stop early
 
 Keep working until the procedure reaches one of these end states: (a) a Reject at step 4, (b) step 5c verification complete, (c) a tool error you report exactly, (d) an eligibility or duplicate-award stop, or (e) `Pending human approval` when no decision is returned. Do not end your turn after discovery, after reading a skill, or after ranking suppliers. Do not close with an offer such as "want me to proceed" or "I can monitor". The next required action after ranking is always the `Human_In_the_loop_approval` call.
@@ -141,7 +132,7 @@ Proceed only when `eventType` is `ExpansionRequest.ReadyForSupplierRecommendatio
 Follow the "Recommend suppliers" section of the Recommend Supplier and Initiate Vendor Award skill:
 
 1. Query the Expansion Request by `requestNumber`. Confirm it exists and is ready for recommendation.
-2. In ONE turn, in parallel, run both of these read queries now (before approval): (a) confirm no Vendor Award already exists for the request (`aitour_vendoraward.aitour_expansionrequestid`); if one exists, stop and report it, do not create a duplicate; (b) `SELECT TOP 1 aitour_awardnumber FROM aitour_vendoraward ORDER BY aitour_awardnumber DESC`. Remember the result of (b). The new award number is that value plus one, for example VA-2026-015 becomes VA-2026-016. Do not query either again after approval.
+2. Confirm no Vendor Award already exists for it (`aitour_vendoraward.aitour_expansionrequestid`). If one exists, stop and report it. Do not create a duplicate.
 3. Query vetted suppliers matching the request's service category, then their invoices and invoice line items.
 4. Rank by the weights in the skill and choose the top supplier.
 
@@ -191,7 +182,7 @@ Stop. Make no writes. Do not finalize. End with status `Rejected by human approv
 
 Do these steps yourself with the data tools, in order.
 
-**5a. Create the Draft Vendor Award** (Recommend skill, "Create a draft Vendor Award"). Create one `aitour_vendoraward` record with the expansion request, the approved supplier, Award Status Draft, a name derived from the request name, a short scope derived from the request description, and the award number you already computed before approval (do not query for it again). Leave Award Amount, Award Date, and Effective Date blank at creation. Do NOT call `get_schema` for this table. Everything you need is listed in this skill: Draft = 100000000, Awarded = 100000001, and the column names and lookup format are above. Go straight to `create_entity`.
+**5a. Create the Draft Vendor Award** (Recommend skill, "Create a draft Vendor Award"). Create one `aitour_vendoraward` record with the expansion request, the approved supplier, Award Status Draft, a name derived from the request name, a short scope derived from the request description, and the next available award number (query existing award numbers and add one to the highest). Leave Award Amount, Award Date, and Effective Date blank at creation. Do NOT call `get_schema` for this table. Everything you need is listed in this skill: Draft = 100000000, Awarded = 100000001, and the column names and lookup format are above. Go straight to `create_entity`.
 
 **5b. Finalize** (Finalize skill, "Finalize the award"). Update ONLY that Vendor Award record:
 
@@ -204,16 +195,11 @@ Do NOT update the Expansion Request. Do NOT create Tasks. If the server-side pos
 
 **5c. Verify** (Finalize skill, "Verify the result"). Verify the Vendor Award only:
 
-1. Run ONE read-back query on the award. It exists, `aitour_awardstatus` is Awarded (100000001), and the amount, award date, and effective date match what you wrote. This is the only verification query. Do not run any other query after the update.
+1. Query the award. It exists, `aitour_awardstatus` is Awarded (100000001), and the amount, award date, and effective date match what you wrote.
 
-The post-award plugin is NOT required for this demo and may be disabled in this environment. When the plugin is disabled, the Expansion Request stays as it was and no Legal, Procurement, or Finance tasks are created. That is expected. Do not query the Expansion Request or Tasks. Do not treat their absence as a failure. Never update the Expansion Request or create Tasks yourself to compensate.
+The post-award plugin is NOT required for this demo and may be disabled in this environment. When the plugin is disabled, the Expansion Request stays as it was and no Legal, Procurement, or Finance tasks are created. That is expected. Report what you observe about the request status and tasks as information only. Do not treat their absence as a failure. Never update the Expansion Request or create Tasks yourself to compensate.
 
-Retry rules for the create (5a) and the update (5b):
-
-- If a write returns an explicit refusal such as `Access denied for POST path` or `Access denied for PATCH path`, nothing was written. Retry the exact same call immediately, up to 2 more times (3 attempts in total), with no other changes and no discovery or schema calls in between. This refusal has been seen to clear on its own.
-- If a write fails in an unclear way (a timeout, `InternalServerError`, or no response), do NOT retry blindly. Run ONE read query for an award on this request first. If an award exists, continue with it and do not create another. If none exists, retry the create once.
-- Never create more than one Vendor Award for the request. Check by query before any retry that follows an unclear failure.
-- If every attempt fails, report the exact error text of the last attempt, how many attempts you made, and stop. Do not enable, disable, or edit plugin steps. Do not switch to a different table or path to get around a refusal.
+If the create or update fails, report the exact error text and stop. Do not retry automatically after an ambiguous response. Do not enable, disable, or edit plugin steps.
 ## Safety
 
 - Do not write anything before approval returns `Approve` for the current run.
@@ -231,7 +217,7 @@ Short summary:
 - Recommended supplier
 - Human decision: `Approve`, `Reject`, or `Pending`
 - Vendor Award number and status, or pending
-- Plugin effects: not checked
+- Plugin effects on the request and tasks, as information only
 - Teams approval destination: `Expansion Requests` / `Requests`
 - Current status: `Awarded after human approval`, `Rejected by human approver`, or `Pending human approval`
 

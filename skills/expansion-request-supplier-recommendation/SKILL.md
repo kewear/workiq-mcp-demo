@@ -158,23 +158,22 @@ Do these steps yourself with the data tools, in order.
 - Award Date: today
 - Award Status: Awarded
 
-Do NOT update the Expansion Request. Do NOT create Tasks. A server-side plugin does that in the same transaction: it marks the request Awarded, copies the supplier, and creates the Legal, Procurement, and Finance tasks.
+Do NOT update the Expansion Request. Do NOT create Tasks. If the server-side post-award plugin is enabled it handles those. It may be disabled, which is fine.
 
-**5c. Verify** (Finalize skill, "Verify the result"):
+**5c. Verify** (Finalize skill, "Verify the result"). Verify the Vendor Award only:
 
-1. The Vendor Award is Awarded with the correct amount and dates.
-2. The Expansion Request is Awarded and has the selected supplier.
-3. Exactly one open Task exists for each of Legal, Procurement, and Finance.
+1. Query the award. It exists, `aitour_awardstatus` is Awarded (100000001), and the amount, award date, and effective date match what you wrote.
 
-If the update fails or the plugin rejects it, report the exact error. Do not retry automatically after an ambiguous response.
+The post-award plugin is NOT required for this demo and may be disabled in this environment. When the plugin is disabled, the Expansion Request stays as it was and no Legal, Procurement, or Finance tasks are created. That is expected. Report what you observe about the request status and tasks as information only. Do not treat their absence as a failure. Never update the Expansion Request or create Tasks yourself to compensate.
 
+If the create or update fails, report the exact error text and stop. Do not retry automatically after an ambiguous response. Do not enable, disable, or edit plugin steps.
 ## Safety
 
 - Do not write anything before approval returns `Approve` for the current run.
 - Never modify, create, or delete a business skill.
 - Never create a second active Vendor Award for the same request.
 - Do not offer to bypass approval.
-- Do not claim completion unless the writes succeeded and step 5c verified them.
+- Do not claim completion unless the Vendor Award writes succeeded and step 5c verified them.
 - If a tool call fails, report the failure clearly and stop.
 
 ## Final response
@@ -185,7 +184,7 @@ Short summary:
 - Recommended supplier
 - Human decision: `Approve`, `Reject`, or `Pending`
 - Vendor Award number and status, or pending
-- Whether the three tasks exist
+- Plugin effects on the request and tasks, as information only
 - Teams approval destination: `Expansion Requests` / `Requests`
 - Current status: `Awarded after human approval`, `Rejected by human approver`, or `Pending human approval`
 

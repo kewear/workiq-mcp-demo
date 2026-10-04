@@ -80,6 +80,8 @@ If discovery returns only a metadata path such as `/businessapps/environments/{e
 
 To run a business skill, use only an executable action/tool path that is actually exposed in the current run. Valid executable surfaces include an attached workflow tool, a returned Business Applications action path, or another concrete action path returned by Work IQ discovery with an `action` operation.
 
+If the supplier recommendation business skill is not executable in the current run, but the Expansion Request already has grounded recommendation data, continue to human approval using that grounded data. Grounded recommendation data means an actual recommended/preferred supplier is available from Work IQ context or Dataverse data, not just a guess. Do not block approval solely because the supplier recommendation skill cannot be re-run.
+
 The award finalization business skill is approval-gated. It may be invoked only after the Work IQ Teams options response returns `Approve`. Never invoke the award finalization business skill while the decision is pending, missing, rejected, ambiguous, or failed.
 
 After approval, finalize only through a confirmed executable finalization business skill/tool. If no finalization action is exposed, report that finalization cannot be completed in the connected environment.
@@ -128,14 +130,15 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 2. Confirm the request exists.
 3. Confirm the request is ready for supplier recommendation.
 4. Discover and invoke the supplier recommendation business skill by name using an executable action/tool exposed in the current run. Do not invent a Custom API path.
-5. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
-6. After the supplier recommendation business skill acknowledgement, continue to the approval step. Fetch the Expansion Request and recommendation details again if tools are available, but do not skip approval if some generated details are incomplete.
-7. Capture the recommended supplier, the Expansion Request budgeted amount, recommendation rationale, and proposed Vendor Award identifier if available.
-8. Call the workflow tool `Human_In_the_loop_approval` to request human approval with `Approve` and `Reject` options.
-9. Wait for `Human_In_the_loop_approval` to return the selected option.
-10. If the decision is `Approve`, discover and invoke the confirmed award finalization business skill/tool if it is exposed, then confirm the Expansion Request or Vendor Award is awarded or completed.
-11. If the decision is `Reject`, mark the supplier recommendation or Expansion Request as rejected and do not finalize the Vendor Award.
-12. Return the final outcome.
+5. If no executable supplier recommendation action/tool is exposed, read the Expansion Request and related recommendation context. If a grounded recommended/preferred supplier is already available, continue to approval using that data and note that the recommendation skill was not re-run.
+6. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
+7. After the supplier recommendation business skill acknowledgement or grounded recommendation lookup, continue to the approval step. Fetch the Expansion Request and recommendation details again if tools are available, but do not skip approval if some generated details are incomplete.
+8. Capture the recommended supplier, the Expansion Request budgeted amount, recommendation rationale, and proposed Vendor Award identifier if available.
+9. Call the workflow tool `Human_In_the_loop_approval` to request human approval with `Approve` and `Reject` options.
+10. Wait for `Human_In_the_loop_approval` to return the selected option.
+11. If the decision is `Approve`, discover and invoke the confirmed award finalization business skill/tool if it is exposed, then confirm the Expansion Request or Vendor Award is awarded or completed.
+12. If the decision is `Reject`, mark the supplier recommendation or Expansion Request as rejected and do not finalize the Vendor Award.
+13. Return the final outcome.
 
 ## Human-in-the-loop approval
 
@@ -157,6 +160,8 @@ Call `Human_In_the_loop_approval` immediately after the supplier recommendation 
 - Options: `Approve`, `Reject`
 
 For `EXP-2026-004`, prior successful runs identified the recommended supplier as `Atlas Regional Manufacturing` and the Expansion Request budgeted amount as `$9,400,000`. Use live data when available, but do not omit these fields from the approval request.
+
+For `EXP-2026-004`, if live supplier recommendation execution is unavailable but Work IQ context still returns `Atlas Regional Manufacturing` as the recommended/preferred supplier, use that as grounded recommendation data and proceed to `Human_In_the_loop_approval`.
 
 When reading the budgeted amount from Dataverse, use only schema-confirmed column logical names. Do not query `aitour_budgetedamount` unless the current table schema explicitly contains that column. If the schema does not expose a budget column, use the grounded value already returned by Work IQ context, or `Not available yet` if no grounded value is available. Do not fail the workflow solely because a guessed budget column is missing.
 

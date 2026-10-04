@@ -100,7 +100,7 @@ WRITE with `create_entity` and `update_entity` (verified working format):
 
 - Never call `get_schema` with a path that ends in `/records`. It returns "Schema not found: .../records". If you do need a schema for a table that is not listed in this skill, call `get_schema` on the table path without `/records`, and if that fails, continue with the columns you know instead of stopping.
 
-- Create: `parentUrl` is `environments/D365AITour005/tables/<logical table name>/records`. The table path alone, without `/records`, is rejected.
+- Create: `parentUrl` is the `records` sub-path returned by a `fetch` of `environments/D365AITour005/tables/<logical table name>`, which is `environments/D365AITour005/tables/<logical table name>/records`. Fetch the table first. The table path alone, without `/records`, is rejected.
 - Update: `entityUrl` is `environments/D365AITour005/tables/<logical table name>/records/<record id>`.
 - `jsonBody` is a JSON object using logical column names as keys.
 - LOOKUP columns must be an object, never a bare GUID and never `@odata.bind`. Use `{"relatedTable": "<logical table name>", "recordId": "<guid>"}`. A bare GUID string fails with `JsonReaderException: Unexpected character encountered while parsing value: d. Path '', line 0, position 0`. That error means you sent a lookup as a plain string.
@@ -182,7 +182,7 @@ Stop. Make no writes. Do not finalize. End with status `Rejected by human approv
 
 Do these steps yourself with the data tools, in order.
 
-**5a. Create the Draft Vendor Award** (Recommend skill, "Create a draft Vendor Award"). Create one `aitour_vendoraward` record with the expansion request, the approved supplier, Award Status Draft, a name derived from the request name, a short scope derived from the request description, and the next available award number (query existing award numbers and add one to the highest). Leave Award Amount, Award Date, and Effective Date blank at creation. Do NOT call `get_schema` for this table. Everything you need is listed in this skill: Draft = 100000000, Awarded = 100000001, and the column names and lookup format are above. Go straight to `create_entity`.
+**5a. Create the Draft Vendor Award** (Recommend skill, "Create a draft Vendor Award"). Create one `aitour_vendoraward` record with the expansion request, the approved supplier, Award Status Draft, a name derived from the request name, a short scope derived from the request description, and the next available award number (query existing award numbers and add one to the highest). Leave Award Amount, Award Date, and Effective Date blank at creation. Do NOT call `get_schema` for this table. Everything you need is listed in this skill: Draft = 100000000, Awarded = 100000001, and the column names and lookup format are above. Before the create, call `fetch` ONCE on the table path `environments/D365AITour005/tables/aitour_vendoraward` and use the `records` sub-path it returns as the `parentUrl` for `create_entity`. This is how the platform presents the write path, and a create sent to a path you were not shown can be refused with `Access denied for POST path`. If the create is still refused with that error, report the exact error text and stop. Do not retry and do not switch to a different path or table.
 
 **5b. Finalize** (Finalize skill, "Finalize the award"). Update ONLY that Vendor Award record:
 

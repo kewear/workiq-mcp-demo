@@ -133,102 +133,43 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 5. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
 6. After the supplier recommendation business skill acknowledgement, continue to the Teams options step. Fetch the Expansion Request, supplier recommendation, and Vendor Award details again if tools are available, but do not skip Teams if those details are incomplete.
 7. Capture the recommended supplier, award amount if available, recommendation rationale, and proposed Vendor Award identifier if available.
-8. Post a response-capable Teams approval with `Approve` and `Reject` options through Work IQ.
-9. Wait for the workflow to return the selected option from the Teams message.
+8. Call the workflow tool `Human_In_the_loop_approval` to request human approval with `Approve` and `Reject` options.
+9. Wait for `Human_In_the_loop_approval` to return the selected option.
 10. If the decision is `Approve`, invoke the award finalization Custom API through Work IQ MCP `do_action` at `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award`, then confirm the Expansion Request or Vendor Award is awarded or completed.
 11. If the decision is `Reject`, mark the supplier recommendation or Expansion Request as rejected and do not finalize the Vendor Award.
 12. Return the final outcome.
 
-## Teams approval message with options
+## Human-in-the-loop approval
 
-The Teams approval step is not an informational notification. It must be response-capable so the workflow can wait for and pass back the human decision.
+The approval step is not an informational notification. It must be response-capable so the workflow can wait for and pass back the human decision.
 
-Do not use a Teams Adaptive Card with `Action.Submit` when the card is posted through a normal channel message. In this runtime, that renders buttons but Teams returns "That action isn't supported here" when the user clicks them.
+Use the workflow tool named `Human_In_the_loop_approval`. Do not hand-roll Teams Adaptive Cards through Work IQ for this approval gate unless the tool is unavailable and the user explicitly asks for a fallback.
 
-Use one of these response-capable patterns:
+Call `Human_In_the_loop_approval` immediately after the supplier recommendation business skill is acknowledged. The request must include:
 
-1. Prefer the Work IQ approval or post-with-options API if it is available. It must create Teams buttons and return the selected option to the workflow.
-2. If using a normal Teams channel message via Work IQ `create_entity`, the Adaptive Card actions must be callback-capable `Action.OpenUrl` buttons pointing to Logic Apps approval callback URLs supplied by the workflow, one for `Approve` and one for `Reject`.
-
-If neither a Work IQ approval/post-with-options API nor callback URLs are available, stop with:
-
-```text
-Blocked: response-capable Teams approval is not available. Do not post a visual-only card.
-```
-
-For a Teams channel message with callback URLs, first resolve the destination:
-
-1. `fetch` `/me/joinedTeams?$select=id,displayName` and select the exact team `Expansion Requests`.
-2. `fetch` `/teams/{teamId}/channels?$select=id,displayName` and select the exact channel `Requests`.
-3. `create_entity` with `parentUrl` `/teams/{teamId}/channels/{channelId}/messages`.
-
-The `jsonBody` must include both `body` and an Adaptive Card attachment. The posted card must render buttons like this:
-
-- `Approve`
-- `Reject`
-
-The approval card title must be:
-
-```text
-Supplier Recommendation Approval
-```
-
-The approval card body must include:
-
-- Request Number
-- Recommended Supplier
-- Award Amount
-- Reason
-- Vendor Award Id
-
-The options must be exactly `Approve` and `Reject`.
-
-Use this body shape only when approval callback URLs are available from the workflow. Replace `APPROVE_CALLBACK_URL` and `REJECT_CALLBACK_URL` with the actual URLs supplied by Logic Apps.
-
-Graph-backed Teams messages require a matching attachment placeholder in the HTML body. The `<attachment id="approvalCard"></attachment>` placeholder must match the attachment `id` value exactly.
-
-```json
-{
-  "body": {
-    "contentType": "html",
-    "content": "Supplier recommendation for Expansion Request EXP-2026-004. Please review and choose Approve or Reject.<br/><attachment id=\"approvalCard\"></attachment>"
-  },
-  "attachments": [
-    {
-      "id": "approvalCard",
-      "contentType": "application/vnd.microsoft.card.adaptive",
-      "contentUrl": null,
-      "content": "{\"$schema\":\"http://adaptivecards.io/schemas/adaptive-card.json\",\"type\":\"AdaptiveCard\",\"version\":\"1.4\",\"body\":[{\"type\":\"TextBlock\",\"size\":\"Large\",\"weight\":\"Bolder\",\"text\":\"Supplier Recommendation Approval\"},{\"type\":\"FactSet\",\"facts\":[{\"title\":\"Request Number\",\"value\":\"EXP-2026-004\"},{\"title\":\"Recommended Supplier\",\"value\":\"Pending\"},{\"title\":\"Award Amount\",\"value\":\"Not available yet\"},{\"title\":\"Reason\",\"value\":\"Pending\"},{\"title\":\"Vendor Award Id\",\"value\":\"Pending\"}]},{\"type\":\"TextBlock\",\"wrap\":true,\"text\":\"Select an action to proceed.\"}],\"actions\":[{\"type\":\"Action.OpenUrl\",\"title\":\"Approve\",\"url\":\"APPROVE_CALLBACK_URL\"},{\"type\":\"Action.OpenUrl\",\"title\":\"Reject\",\"url\":\"REJECT_CALLBACK_URL\"}],\"msteams\":{\"width\":\"full\"}}"
-    }
-  ]
-}
-```
-
-Do not call `create_entity` with only a `body` field. A plain channel message without an approval card does not satisfy this skill.
-
-Do not post an Adaptive Card that uses `Action.Submit` through normal Teams channel message creation. That produces unsupported buttons in this runtime.
-
-This call must be made through the Work IQ MCP server, not by asking the user to send a Teams message and not by using a non-Work-IQ connector. The visible evidence of success is that the run contains a Work IQ MCP call for Teams/channel messaging after the supplier recommendation business skill call.
-
-Use Work IQ to post the message to:
-
-- Team: `Expansion Requests`
-- Channel: `Requests`
-
-The message must include:
-
-- Expansion Request number
+- Approval title: `Supplier Recommendation Approval`
+- Request number
 - Recommended supplier, or `Pending` if not available yet
 - Award amount, or `Not available yet`
 - Reason for recommendation, or `Pending`
 - Vendor Award identifier, if created, or `Pending`
-- Clear prompt asking the human approver to choose an action
+- Options: `Approve`, `Reject`
 
-Before posting, resolve the Team ID and Channel ID using the exact fetch calls above if the selected approval pattern requires them. If exactly one matching team and channel is found, post the approval card with response-capable buttons. If the destination is ambiguous or not found, return an error and do not post.
+If the tool has destination fields, use:
+
+- Team: `Expansion Requests`
+- Channel: `Requests`
+
+The approval tool must return one of:
+
+- `Approve`
+- `Reject`
+
+If `Human_In_the_loop_approval` is not available or fails, stop and report the failure clearly. Do not post a plain Teams message and do not finalize the award.
 
 ## Approval decision handling
 
-After posting the Work IQ Teams message with options, wait for the selected option that the workflow returns.
+After calling `Human_In_the_loop_approval`, wait for the selected option that the workflow returns.
 
 If the selected option is `Approve`:
 
@@ -256,10 +197,10 @@ If the Work IQ options message is posted but no decision is returned in the curr
 - Do not create, update, or publish skill definitions during this process.
 - Do not report tool metadata as the final business outcome.
 - Do not stop after the Dataverse business skill succeeds.
-- Do not make additional Business Applications or Dataverse calls after the supplier recommendation business skill until a response-capable Work IQ Teams approval has been posted.
+- Do not make additional Business Applications or Dataverse calls after the supplier recommendation business skill until `Human_In_the_loop_approval` returns a decision or fails.
 - Do not post a plain Teams channel message.
 - Do not post a visual-only Adaptive Card with `Action.Submit` through normal Teams channel message creation.
-- Do not ask the user whether to post the Teams approval message. Posting it is mandatory.
+- Do not ask the user whether to call `Human_In_the_loop_approval`. Calling it is mandatory.
 - Do not create duplicate Vendor Awards if one already exists for the request.
 - Do not post to Teams if the team or channel is ambiguous.
 - Do not claim completion unless the human approval decision has been received and processed.

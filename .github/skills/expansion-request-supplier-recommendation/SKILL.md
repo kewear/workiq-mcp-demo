@@ -80,7 +80,7 @@ Working queries (verified):
 - Existing awards for the request: `SELECT aitour_awardnumber, aitour_awardstatus FROM aitour_vendoraward WHERE aitour_expansionrequestid = '<expansionRequestId>'`
 - Highest award number: `SELECT TOP 1 aitour_awardnumber FROM aitour_vendoraward ORDER BY aitour_awardnumber DESC`
 
-Do not call `get_schema` or sample-query these tables to discover column names. They are listed above. Use `get_schema` only for a table not listed here (for example Task).
+Do not call `get_schema` or sample-query these tables to discover column names. They are listed above, including `aitour_vendoraward`. Use `get_schema` only for a table not listed here, and never with a path ending in `/records`.
 
 ## How to read and write data (verified)
 
@@ -97,6 +97,8 @@ Example for step 1: `SELECT aitour_expansionrequestid, aitour_name, aitour_estim
 Do NOT use app-scoped table paths (anything under `environments/D365AITour005/apps/...`) to read these records. The Caldova Vendor Award app is wired to the cab tables, so that route leads to the wrong data. If a fetch returns no record data, use the query action above instead of switching to an app view.
 
 WRITE with `create_entity` and `update_entity` (verified working format):
+
+- Never call `get_schema` with a path that ends in `/records`. It returns "Schema not found: .../records". If you do need a schema for a table that is not listed in this skill, call `get_schema` on the table path without `/records`, and if that fails, continue with the columns you know instead of stopping.
 
 - Create: `parentUrl` is `environments/D365AITour005/tables/<logical table name>/records`. The table path alone, without `/records`, is rejected.
 - Update: `entityUrl` is `environments/D365AITour005/tables/<logical table name>/records/<record id>`.
@@ -180,7 +182,7 @@ Stop. Make no writes. Do not finalize. End with status `Rejected by human approv
 
 Do these steps yourself with the data tools, in order.
 
-**5a. Create the Draft Vendor Award** (Recommend skill, "Create a draft Vendor Award"). Create one `aitour_vendoraward` record with the expansion request, the approved supplier, Award Status Draft, a name derived from the request name, a short scope derived from the request description, and the next available award number (query existing award numbers and add one to the highest). Leave Award Amount, Award Date, and Effective Date blank at creation. Use `get_schema` on the table first for the Draft choice value.
+**5a. Create the Draft Vendor Award** (Recommend skill, "Create a draft Vendor Award"). Create one `aitour_vendoraward` record with the expansion request, the approved supplier, Award Status Draft, a name derived from the request name, a short scope derived from the request description, and the next available award number (query existing award numbers and add one to the highest). Leave Award Amount, Award Date, and Effective Date blank at creation. Do NOT call `get_schema` for this table. Everything you need is listed in this skill: Draft = 100000000, Awarded = 100000001, and the column names and lookup format are above. Go straight to `create_entity`.
 
 **5b. Finalize** (Finalize skill, "Finalize the award"). Update ONLY that Vendor Award record:
 

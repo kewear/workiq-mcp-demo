@@ -1,6 +1,6 @@
 ---
 name: expansion-request-supplier-recommendation
-description: Use when an event has eventType ExpansionRequest.ReadyForSupplierRecommendation or ExpansionRequest.SupplierRecommendationApprovalReceived. Processes the Expansion Request supplier recommendation, creates the required human approval gate, and completes the request only after an explicit approval event.
+description: Use when an event has eventType ExpansionRequest.ReadyForSupplierRecommendation. Processes the Expansion Request supplier recommendation, sends an actionable Work IQ Teams approval message with Approve and Reject options, waits for the decision returned by the workflow, and then completes or rejects the award.
 ---
 
 # Expansion Request Supplier Recommendation
@@ -10,34 +10,30 @@ description: Use when an event has eventType ExpansionRequest.ReadyForSupplierRe
 When this skill is selected, the first assistant message must explicitly confirm that the skill was found and selected:
 
 ```text
-Found skill: expansion-request-supplier-recommendation. I will process Expansion Request <requestNumber> and create the required human approval gate.
+Found skill: expansion-request-supplier-recommendation. I will process Expansion Request <requestNumber>, request human approval in Teams, wait for the approval decision, and then complete or reject the award.
 ```
 
 Do not start by saying that you will search for Work IQ paths. Skill selection has already happened.
 
 ## Purpose
 
-Process Expansion Request business events that require supplier recommendation and human approval. This skill has two supported phases:
-
-1. `ExpansionRequest.ReadyForSupplierRecommendation`: recommend a supplier, initiate or propose the Vendor Award process in Dataverse, and create an actionable Teams approval request through Work IQ.
-2. `ExpansionRequest.SupplierRecommendationApprovalReceived`: complete or reject the Expansion Request only after the human approval decision is received.
+Process an Expansion Request business event when the request is ready for supplier recommendation. The skill recommends a supplier, initiates or proposes the Vendor Award process in Dataverse, sends a human approval message to Teams through Work IQ, waits for the returned approval decision, and then completes or rejects the award based on that decision.
 
 Human approval is required before the Expansion Request or Vendor Award can be completed.
 
-## Supported events
+## Event handled
 
-- `ExpansionRequest.ReadyForSupplierRecommendation`
-- `ExpansionRequest.SupplierRecommendationApprovalReceived`
+`ExpansionRequest.ReadyForSupplierRecommendation`
 
 ## Inputs
 
-The supplier recommendation event payload must include:
+The event payload must include:
 
 - `eventType`
 - `requestNumber`
 - `status`
 
-Example supplier recommendation event:
+Example payload:
 
 ```json
 {
@@ -47,38 +43,21 @@ Example supplier recommendation event:
 }
 ```
 
-The approval decision event payload must include:
-
-- `eventType`
-- `requestNumber`
-- `decision`
-- `approver`
-
-Example approval decision event:
-
-```json
-{
-  "eventType": "ExpansionRequest.SupplierRecommendationApprovalReceived",
-  "requestNumber": "EXP-2026-004",
-  "decision": "Approve",
-  "approver": "Kent Weare"
-}
-```
-
 ## Environment binding
 
 Use the configured `D365AITour` Dataverse environment. Do not ask the user or event payload for the Dataverse environment. The event contains business context only. The skill owns the environment and tool binding.
 
-## Phase 1: Supplier recommendation and approval request
+## Eligibility checks
 
-Use this phase when `eventType` is `ExpansionRequest.ReadyForSupplierRecommendation`.
+Proceed only when all of the following are true:
 
-Eligibility checks:
-
+- `eventType` equals `ExpansionRequest.ReadyForSupplierRecommendation`
 - `status` equals `Ready for supplier recommendation`
 - `requestNumber` is present
 
-Business process:
+If any eligibility check fails, stop and return a concise explanation of why no action was taken.
+
+## Business process
 
 1. Find the Expansion Request by `requestNumber`.
 2. Confirm the request exists.
@@ -87,93 +66,75 @@ Business process:
 5. Treat responses such as `Skill updated successfully`, `acknowledged`, or `workflow initiated` as intermediate acknowledgements only. They are not completion.
 6. After the Dataverse skill acknowledgement, fetch the Expansion Request, supplier recommendation, and Vendor Award details again if tools are available.
 7. Capture the recommended supplier, award amount if available, recommendation rationale, and proposed Vendor Award identifier if available.
-8. Create a Teams approval request using Work IQ. This must be actionable, not just informational.
-9. Stop with status `Pending human approval`.
+8. Use the Work IQ MCP server to post an actionable Teams message with options.
+9. Wait for the workflow to return the selected option from the Teams message.
+10. If the decision is `Approve`, finalize or complete the Vendor Award and mark the Expansion Request as awarded or completed using the available Dataverse action or record update.
+11. If the decision is `Reject`, mark the supplier recommendation or Expansion Request as rejected and do not finalize the Vendor Award.
+12. Return the final outcome.
 
-## Human approval gate
+## Teams approval message with options
 
-The Teams approval request is mandatory and must be created after the supplier recommendation step succeeds or is acknowledged.
+The Teams approval step is not an informational notification. It must be a Work IQ message with options so the workflow can wait for and pass back the human decision.
 
-Do not wait for finalized Vendor Award records before creating approval. If the Vendor Award identifier, recommended supplier, award amount, or rationale are not available yet, include `Pending` or `Not available yet` for those fields and still create the approval request.
-
-The process is not complete after `Skill updated successfully`. The process is only waiting for a human approval decision.
-
-The Teams approval must allow the approver to choose:
-
-- `Approve`
-- `Reject`
-
-If Work IQ supports actionable cards, approvals, buttons, or adaptive-card actions, use that mechanism. If only a Teams channel message is available, post a clear approval request message with the `Approve` and `Reject` options and return `Pending human approval`.
-
-## Teams approval destination
+Use Work IQ to post the message to:
 
 - Team: `Expansion Requests`
 - Channel: `Requests`
 
-The Teams approval request must include:
+The message must include:
 
 - Expansion Request number
 - Recommended supplier, or `Pending` if not available yet
 - Award amount, or `Not available yet`
 - Reason for recommendation, or `Pending`
 - Vendor Award identifier, if created, or `Pending`
-- Approval options: `Approve`, `Reject`
-- Status: `Pending human approval`
+- Clear prompt asking the human approver to choose an action
 
-Before posting, resolve the Team ID and Channel ID. If exactly one matching team and channel is found, create the approval request. If the destination is ambiguous or not found, return an error and do not post.
+The options must be exactly:
 
-## Phase 2: Approval decision completion
+- `Approve`
+- `Reject`
 
-Use this phase when `eventType` is `ExpansionRequest.SupplierRecommendationApprovalReceived`.
+Before posting, resolve the Team ID and Channel ID. If exactly one matching team and channel is found, post the options message. If the destination is ambiguous or not found, return an error and do not post.
 
-Eligibility checks:
+## Approval decision handling
 
-- `requestNumber` is present
-- `decision` is `Approve` or `Reject`
-- `approver` is present
+After posting the Work IQ Teams message with options, wait for the selected option that the workflow returns.
 
-Business process for `Approve`:
+If the selected option is `Approve`:
 
-1. Find the Expansion Request by `requestNumber`.
-2. Confirm the request exists.
-3. Confirm the request is waiting for supplier recommendation approval.
-4. Finalize or complete the Vendor Award only if the approval decision is `Approve`.
-5. Mark the Expansion Request or related approval state as approved or completed using the available Dataverse action or record update.
-6. Return status `Completed after human approval`.
+1. Confirm the request is still eligible to be awarded.
+2. Complete or finalize the Vendor Award using the available Dataverse action or record update.
+3. Mark the Expansion Request as awarded, approved, or completed using the available Dataverse action or record update.
+4. Return status `Awarded after human approval`.
 
-Business process for `Reject`:
+If the selected option is `Reject`:
 
-1. Find the Expansion Request by `requestNumber`.
-2. Confirm the request exists.
-3. Mark the supplier recommendation approval as rejected using the available Dataverse action or record update.
-4. Do not finalize the Vendor Award.
-5. Return status `Rejected by human approver`.
+1. Confirm the request exists.
+2. Mark the supplier recommendation or approval state as rejected using the available Dataverse action or record update.
+3. Do not finalize the Vendor Award.
+4. Return status `Rejected by human approver`.
+
+If the Work IQ options message is posted but no decision is returned in the current workflow execution, return status `Pending human approval` and do not claim the award is complete.
 
 ## Safety rules
 
-- Do not finalize the Vendor Award during the `ReadyForSupplierRecommendation` phase.
-- Do not complete the Expansion Request until an approval decision event is received.
+- Do not finalize the Vendor Award before the human selects `Approve`.
+- Do not complete the Expansion Request before the human selects `Approve`.
 - Do not offer to bypass approval.
 - Do not treat `Skill updated successfully` as the final outcome.
 - Do not create duplicate Vendor Awards if one already exists for the request.
 - Do not post to Teams if the team or channel is ambiguous.
-- Do not claim completion unless a human approval decision has been received and processed.
+- Do not claim completion unless the human approval decision has been received and processed.
 - If a tool call fails, report the failure clearly and stop.
 
-## Success responses
+## Success response
 
-For `ExpansionRequest.ReadyForSupplierRecommendation`, return a short summary with:
+Return a short summary with:
 
 - Request number
 - Recommended supplier, or pending status
+- Human decision: `Approve`, `Reject`, or `Pending`
 - Vendor Award identifier, or pending status
 - Teams approval destination
-- Current status: `Pending human approval`
-
-For `ExpansionRequest.SupplierRecommendationApprovalReceived`, return a short summary with:
-
-- Request number
-- Human decision
-- Approver
-- Vendor Award identifier, or pending status
-- Current status: `Completed after human approval` or `Rejected by human approver`
+- Current status: `Awarded after human approval`, `Rejected by human approver`, or `Pending human approval`

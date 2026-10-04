@@ -14,6 +14,10 @@ Business skills are INSTRUCTIONS, not executable actions. They describe how to s
 - The `fetch/update/delete` operations listed for a skill describe how to manage the skill document. They are not a way to run it.
 - Never look for an "execution surface" for a business skill. There isn't one, and none is needed.
 
+## Do not stop early
+
+Keep working until the procedure reaches one of these end states: (a) step 4 after a Reject, (b) step 5c verification complete, (c) a tool error you report exactly, or (d) an eligibility or duplicate-award stop. Do not end your turn after discovery, after reading a skill, or after ranking suppliers. Do not close with an offer such as 'want me to proceed' or 'I can monitor'. The next required action after ranking is always the Human_In_the_loop_approval call.
+
 ## Environment
 
 Use the `D365AITour005` environment. Do not ask for environment details.

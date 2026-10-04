@@ -58,6 +58,32 @@ Use Work IQ MCP to invoke business skills only:
 - Invoke the supplier recommendation business skill: `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
 - After Teams approval, invoke the business skill that finalizes or awards the vendor. If the exact logical name is not already known, discover the available business skills and select the one whose purpose is to finalize or award the approved Vendor Award.
 
+### Executable business skill paths
+
+The Business Applications `/skills/{skillName}` resource is metadata only. Do not try to execute a business skill by fetching or updating `/businessapps/environments/{environmentId}/skills/{skillName}`.
+
+Invoke the business skills as Dataverse Custom APIs through Work IQ MCP `do_action`:
+
+- Supplier recommendation action URL:
+  `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
+- Award finalization action URL:
+  `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award`
+
+Before invoking either Custom API, call `get_schema` once on the exact Custom API action URL with `operationType: "action"` to confirm the request body shape and parameter casing. Then call `do_action` on that same Custom API action URL.
+
+For supplier recommendation, the request body must include the event's `requestNumber` and a short business description. Use schema-confirmed field names. If the schema exposes compatible names, use:
+
+```json
+{
+  "RequestNumber": "EXP-2026-004",
+  "Description": "Recommend a supplier and initiate the Vendor Award for Expansion Request EXP-2026-004."
+}
+```
+
+If the schema uses different casing, preserve the schema-confirmed casing. Do not omit the description if the schema requires it.
+
+For award finalization, invoke `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award` only after the Teams approval decision is `Approve`.
+
 The award finalization business skill is approval-gated. It may be invoked only after the Work IQ Teams options response returns `Approve`. Never invoke the award finalization business skill while the decision is pending, missing, rejected, ambiguous, or failed.
 
 Do not report tool metadata as the business outcome. The business outcome must be one of: Teams approval requested, awarded after human approval, rejected by human approver, or a clear failure.
@@ -103,13 +129,13 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 1. Find the Expansion Request by `requestNumber`.
 2. Confirm the request exists.
 3. Confirm the request is ready for supplier recommendation.
-4. Invoke the Dataverse business skill `cr2d6_skill_recommend_supplier_and_initiate_vendor_award` through the Work IQ MCP server.
+4. Invoke the Dataverse supplier recommendation Custom API through Work IQ MCP `do_action` at `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_recommend_supplier_and_initiate_vendor_award`.
 5. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
 6. After the supplier recommendation business skill acknowledgement, continue to the Teams options step. Fetch the Expansion Request, supplier recommendation, and Vendor Award details again if tools are available, but do not skip Teams if those details are incomplete.
 7. Capture the recommended supplier, award amount if available, recommendation rationale, and proposed Vendor Award identifier if available.
 8. Post a response-capable Teams approval with `Approve` and `Reject` options through Work IQ.
 9. Wait for the workflow to return the selected option from the Teams message.
-10. If the decision is `Approve`, invoke the award finalization business skill through the Work IQ MCP server, then confirm the Expansion Request or Vendor Award is awarded or completed.
+10. If the decision is `Approve`, invoke the award finalization Custom API through Work IQ MCP `do_action` at `/businessapps/environments/D365AITour005/customapis/cr2d6_skill_finalize_vendor_award`, then confirm the Expansion Request or Vendor Award is awarded or completed.
 11. If the decision is `Reject`, mark the supplier recommendation or Expansion Request as rejected and do not finalize the Vendor Award.
 12. Return the final outcome.
 

@@ -15,9 +15,9 @@ Found skill: expansion-request-supplier-recommendation. I will process Expansion
 
 That acknowledgement is not a valid final response. Do not return it as the whole result. Continue immediately to discovering/invoking the supplier recommendation business skill, then call `Human_In_the_loop_approval`.
 
-Do not start by saying that you will search for Work IQ paths. Skill selection has already happened.
+Do not search Work IQ for the GitHub process skill name. Skill selection has already happened. Work IQ discovery is only for Business Applications data, business skill surfaces, and record context.
 
-If the agent starts by saying it will update status, monitor for records, or proceed to finalize later, that is the wrong flow. The correct flow is to follow this GitHub process skill, discover and invoke the supplier recommendation business skill by name, call `Human_In_the_loop_approval`, and only then finalize on `Approve` if a confirmed finalization business skill/tool is exposed.
+If the agent starts by saying it will update status, monitor for records, or proceed to finalize later, that is the wrong flow. The correct flow is to follow this GitHub process skill, discover the supplier recommendation business skill by name, use grounded recommendation data when execution is not exposed, call `Human_In_the_loop_approval`, and only then finalize on `Approve` if a confirmed finalization business skill/tool is exposed.
 
 ## Purpose
 
@@ -27,29 +27,30 @@ Human approval is required before the Expansion Request or Vendor Award can be c
 
 ## Non-negotiable execution checkpoints
 
-This skill is not complete after the Dataverse business skill runs. The required execution order is:
+This skill is not complete after business skill discovery or supplier recommendation. The required execution order is:
 
 1. Find the Expansion Request.
-2. Invoke the supplier recommendation business skill through the Work IQ MCP server.
-3. Call `Human_In_the_loop_approval` so the human decision can be returned to the workflow.
-4. Wait for the returned option if the workflow provides one.
-5. If the returned option is `Approve`, invoke the award finalization business skill through the Work IQ MCP server.
-6. If the returned option is `Reject`, mark the request or recommendation rejected and do not finalize the award.
+2. Discover the supplier recommendation business skill by name and invoke it only if an executable action/tool is exposed.
+3. If only metadata is exposed, read grounded recommendation data from the Expansion Request and related context.
+4. Call `Human_In_the_loop_approval` so the human decision can be returned to the workflow.
+5. Wait for the returned option if the workflow provides one.
+6. If the returned option is `Approve`, invoke the award finalization business skill through the Work IQ MCP server only if an executable action/tool is exposed.
+7. If the returned option is `Reject`, mark the request or recommendation rejected and do not finalize the award.
 
-Do not send a final assistant response after step 2. After the supplier recommendation business skill is invoked, immediately proceed to the Work IQ Teams options call. A response that only says the supplier recommendation business skill succeeded is incomplete and must be treated as a failed run.
+Do not send a final assistant response after skill discovery or recommendation lookup. A response that only says the supplier recommendation skill is metadata-only is incomplete when grounded recommendation data exists.
 
-The required Teams call must produce buttons that can be acted on in Teams and return the selected decision to the workflow. Do not substitute a plain Teams channel message, a visual-only Adaptive Card, a Dataverse update, or a suggestion to fetch details later.
+The required approval call is `Human_In_the_loop_approval`. Do not substitute a plain Teams channel message, a visual-only Adaptive Card, a Dataverse update, or a suggestion to fetch details later.
 
-After the supplier recommendation business skill returns, do not make any more Business Applications or Dataverse calls until the response-capable Teams approval has been posted.
+After grounded recommendation data is available, do not keep searching for alternate supplier-recommendation routes. Call `Human_In_the_loop_approval`.
 
 Never end the run with any of these responses:
 
 - "Want me to monitor for the award record?"
 - "Want me to proceed to run Finalize Vendor Award?"
 - "No new Vendor Award records created yet."
-- "Supplier recommendation initiated" without also posting the Teams approval options message.
+- "Supplier recommendation initiated" without also calling `Human_In_the_loop_approval`.
 
-Those responses skipped the required Work IQ Teams approval call.
+Those responses skipped the required human approval call.
 
 ## Skill invocation rules
 
@@ -58,7 +59,7 @@ Business skills are runtime actions. Do not create, edit, update, publish, or ov
 Use Work IQ MCP to invoke business skills only:
 
 - Invoke the supplier recommendation business skill: `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
-- After Teams approval, invoke the business skill that finalizes or awards the vendor. If the exact logical name is not already known, discover the available business skills and select the one whose purpose is to finalize or award the approved Vendor Award.
+- After `Human_In_the_loop_approval` returns `Approve`, invoke the business skill that finalizes or awards the vendor if an executable finalization action/tool is exposed.
 
 ### Business skill discovery and execution
 
@@ -82,7 +83,9 @@ To run a business skill, use only an executable action/tool path that is actuall
 
 If the supplier recommendation business skill is not executable in the current run, but the Expansion Request already has grounded recommendation data, continue to human approval using that grounded data. Grounded recommendation data means an actual recommended/preferred supplier is available from Work IQ context or Dataverse data, not just a guess. Do not block approval solely because the supplier recommendation skill cannot be re-run.
 
-The award finalization business skill is approval-gated. It may be invoked only after the Work IQ Teams options response returns `Approve`. Never invoke the award finalization business skill while the decision is pending, missing, rejected, ambiguous, or failed.
+Metadata-only discovery is not a blocker by itself. If the supplier recommendation skill is visible only as metadata, perform a bounded lookup for the request's recommended/preferred supplier, budgeted amount, recommendation reason, and Vendor Award id. If a recommended/preferred supplier is grounded, proceed to `Human_In_the_loop_approval`.
+
+The award finalization business skill is approval-gated. It may be invoked only after `Human_In_the_loop_approval` returns `Approve`. Never invoke the award finalization business skill while the decision is pending, missing, rejected, ambiguous, or failed.
 
 After approval, finalize only through a confirmed executable finalization business skill/tool. If no finalization action is exposed, report that finalization cannot be completed in the connected environment.
 
@@ -132,7 +135,7 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 4. Discover and invoke the supplier recommendation business skill by name using an executable action/tool exposed in the current run. Do not invent a Custom API path.
 5. If no executable supplier recommendation action/tool is exposed, read the Expansion Request and related recommendation context. If a grounded recommended/preferred supplier is already available, continue to approval using that data and note that the recommendation skill was not re-run.
 6. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
-7. After the supplier recommendation business skill acknowledgement or grounded recommendation lookup, continue to the approval step. Fetch the Expansion Request and recommendation details again if tools are available, but do not skip approval if some generated details are incomplete.
+7. After the supplier recommendation business skill acknowledgement or grounded recommendation lookup, continue to the approval step. Fetch the Expansion Request and recommendation details again if tools are available, but do not skip approval when a grounded recommended/preferred supplier and request context are available.
 8. Capture the recommended supplier, the Expansion Request budgeted amount, recommendation rationale, and proposed Vendor Award identifier if available.
 9. Call the workflow tool `Human_In_the_loop_approval` to request human approval with `Approve` and `Reject` options.
 10. Wait for `Human_In_the_loop_approval` to return the selected option.
@@ -198,7 +201,7 @@ If the selected option is `Reject`:
 3. Do not finalize the Vendor Award.
 4. Return status `Rejected by human approver`.
 
-If the Work IQ options message is posted but no decision is returned in the current workflow execution, return status `Pending human approval` and do not claim the award is complete.
+If `Human_In_the_loop_approval` is called but no decision is returned in the current workflow execution, return status `Pending human approval` and do not claim the award is complete.
 
 ## Safety rules
 
@@ -209,8 +212,8 @@ If the Work IQ options message is posted but no decision is returned in the curr
 - Do not offer to bypass approval.
 - Do not create, update, or publish skill definitions during this process.
 - Do not report tool metadata as the final business outcome.
-- Do not stop after the Dataverse business skill succeeds.
-- Do not make additional Business Applications or Dataverse calls after the supplier recommendation business skill until `Human_In_the_loop_approval` returns a decision or fails.
+- Do not stop after metadata-only business skill discovery when grounded recommendation data exists.
+- Do not make unrelated Business Applications or Dataverse calls after grounded recommendation data is available; call `Human_In_the_loop_approval`.
 - Do not query guessed Dataverse columns such as `aitour_budgetedamount`; use schema-confirmed columns only.
 - Do not post a plain Teams channel message.
 - Do not post a visual-only Adaptive Card with `Action.Submit` through normal Teams channel message creation.

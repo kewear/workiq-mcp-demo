@@ -26,14 +26,26 @@ Human approval is required before the Expansion Request or Vendor Award can be c
 This skill is not complete after the Dataverse business skill runs. The required execution order is:
 
 1. Find the Expansion Request.
-2. Call the Dataverse business skill through the Work IQ MCP server.
+2. Invoke the supplier recommendation business skill through the Work IQ MCP server.
 3. Call the Work IQ MCP Teams tool to post a message with options.
 4. Wait for the returned option if the workflow provides one.
-5. Award or reject only after the returned option is available.
+5. If the returned option is `Approve`, invoke the award finalization business skill through the Work IQ MCP server.
+6. If the returned option is `Reject`, mark the request or recommendation rejected and do not finalize the award.
 
-Do not send a final assistant response after step 2. After the Dataverse business skill returns `Skill updated successfully`, immediately proceed to the Work IQ Teams options call. A response that only says the Dataverse skill succeeded is incomplete and must be treated as a failed run.
+Do not send a final assistant response after step 2. After the supplier recommendation business skill is invoked, immediately proceed to the Work IQ Teams options call. A response that only says the supplier recommendation business skill succeeded is incomplete and must be treated as a failed run.
 
 The required Teams call must be a Work IQ MCP call that posts a Teams message with options. Do not substitute a plain status message, a Dataverse update, or a suggestion to fetch details later.
+
+## Skill invocation rules
+
+Business skills are runtime actions. Do not create, edit, update, publish, or overwrite skill definitions as part of this process.
+
+Use Work IQ MCP to invoke business skills only:
+
+- Invoke the supplier recommendation business skill: `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`
+- After Teams approval, invoke the business skill that finalizes or awards the vendor. If the exact logical name is not already known, discover the available business skills and select the one whose purpose is to finalize or award the approved Vendor Award.
+
+Do not report tool metadata as the business outcome. The business outcome must be one of: Teams approval requested, awarded after human approval, rejected by human approver, or a clear failure.
 
 ## Event handled
 
@@ -76,13 +88,13 @@ If any eligibility check fails, stop and return a concise explanation of why no 
 1. Find the Expansion Request by `requestNumber`.
 2. Confirm the request exists.
 3. Confirm the request is ready for supplier recommendation.
-4. Run the Dataverse skill `cr2d6_skill_recommend_supplier_and_initiate_vendor_award`.
-5. Treat responses such as `Skill updated successfully`, `acknowledged`, or `workflow initiated` as intermediate acknowledgements only. They are not completion, and they must not be reported as the final outcome.
-6. After the Dataverse skill acknowledgement, continue to the Teams options step. Fetch the Expansion Request, supplier recommendation, and Vendor Award details again if tools are available, but do not skip Teams if those details are incomplete.
+4. Invoke the Dataverse business skill `cr2d6_skill_recommend_supplier_and_initiate_vendor_award` through the Work IQ MCP server.
+5. Treat tool status responses as invocation acknowledgements only. They are not completion, and they must not be reported as the final outcome.
+6. After the supplier recommendation business skill acknowledgement, continue to the Teams options step. Fetch the Expansion Request, supplier recommendation, and Vendor Award details again if tools are available, but do not skip Teams if those details are incomplete.
 7. Capture the recommended supplier, award amount if available, recommendation rationale, and proposed Vendor Award identifier if available.
 8. Use the Work IQ MCP server to post an actionable Teams message with options.
 9. Wait for the workflow to return the selected option from the Teams message.
-10. If the decision is `Approve`, finalize or complete the Vendor Award and mark the Expansion Request as awarded or completed using the available Dataverse action or record update.
+10. If the decision is `Approve`, invoke the award finalization business skill through the Work IQ MCP server, then confirm the Expansion Request or Vendor Award is awarded or completed.
 11. If the decision is `Reject`, mark the supplier recommendation or Expansion Request as rejected and do not finalize the Vendor Award.
 12. Return the final outcome.
 
@@ -120,8 +132,8 @@ After posting the Work IQ Teams message with options, wait for the selected opti
 If the selected option is `Approve`:
 
 1. Confirm the request is still eligible to be awarded.
-2. Complete or finalize the Vendor Award using the available Dataverse action or record update.
-3. Mark the Expansion Request as awarded, approved, or completed using the available Dataverse action or record update.
+2. Invoke the business skill that finalizes or awards the approved Vendor Award through the Work IQ MCP server.
+3. Confirm the Expansion Request or Vendor Award is awarded, approved, or completed.
 4. Return status `Awarded after human approval`.
 
 If the selected option is `Reject`:
@@ -138,7 +150,8 @@ If the Work IQ options message is posted but no decision is returned in the curr
 - Do not finalize the Vendor Award before the human selects `Approve`.
 - Do not complete the Expansion Request before the human selects `Approve`.
 - Do not offer to bypass approval.
-- Do not treat `Skill updated successfully` as the final outcome.
+- Do not create, update, or publish skill definitions during this process.
+- Do not report tool metadata as the final business outcome.
 - Do not stop after the Dataverse business skill succeeds.
 - Do not ask the user whether to post the Teams approval message. Posting it is mandatory.
 - Do not create duplicate Vendor Awards if one already exists for the request.

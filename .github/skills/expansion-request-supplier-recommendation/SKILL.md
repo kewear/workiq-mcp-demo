@@ -46,6 +46,21 @@ Never guess a column. Do not query `aitour_budgetedamount`; it does not exist.
 
 For any other table or column (suppliers, invoices, invoice line items, the Draft status value, tasks), call `get_schema` first and use only what it returns.
 
+## How to read and write data (verified)
+
+READ with the environment query action. This is the only read method to use for the tables in this skill:
+
+- Tool: `do_action`
+- `actionUrl`: `environments/D365AITour005/query`
+- `jsonBody`: `{"querytext": "SELECT ... FROM aitour_expansionrequest WHERE aitour_requestnumber = '<requestNumber>'"}`
+
+Use Dataverse logical table and column names, one SELECT, and an explicit column list or `SELECT *`. No subqueries, DISTINCT, HAVING, CASE, or CAST. JOINs on equality are allowed.
+
+Example for step 1: `SELECT aitour_expansionrequestid, aitour_name, aitour_estimatedbudget, aitour_requeststatus, aitour_servicecategory, aitour_targetdate FROM aitour_expansionrequest WHERE aitour_requestnumber = '<requestNumber>'`
+
+Do NOT use app-scoped table paths (anything under `environments/D365AITour005/apps/...`) to read these records. The Caldova Vendor Award app is wired to the cab tables, so that route leads to the wrong data. If a fetch returns no record data, use the query action above instead of switching to an app view.
+
+WRITE with `create_entity` and `update_entity` on the environment table path. Records are addressed as `environments/D365AITour005/tables/<logical table name>/records/<record id>` for update. Call `get_schema` on the table first for exact column names and choice values.
 ## Inputs
 
 The event must include `eventType`, `requestNumber`, and `status`. It may include `effectiveDate`.

@@ -32,12 +32,7 @@ Read both at the start. Their names are:
 
 Do not hand-build paths. Call `search_paths` with the skill name, then `fetch` the path it returns, exactly as returned.
 
-If a live read is denied ("Access denied"), returns "not found", or fails for any reason, DO NOT STOP. Read the bundled fallback copy in this skill's folder instead and continue:
-
-- `references/recommend-supplier-and-initiate-vendor-award.md`
-- `references/finalize-vendor-award.md`
-
-The bundled copies have the same content as the Work IQ skills. Say in your final response which source you used. A denied or failed skill read is never a reason to end the run.
+If a live read fails, call `search_paths` again for that skill and `fetch` the path it returns, exactly as returned. If it still fails, report the exact error text and stop. Do not hand-build a path.
 
 Follow their instructions exactly. They define the scoring weights, the draft award fields, the commercial-term rules, and the verification steps.
 ## Tables: original set only

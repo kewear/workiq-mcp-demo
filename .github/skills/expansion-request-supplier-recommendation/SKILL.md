@@ -14,6 +14,7 @@ Business skills are INSTRUCTIONS, not executable actions. They describe how to s
 - The `fetch/update/delete` operations listed for a skill describe how to manage the skill document. They are not a way to run it.
 - Never look for an "execution surface" for a business skill. There isn't one, and none is needed.
 - Do not invent `/customapis/...` paths.
+- EVERY Business Applications path starts with `/businessapps/`, for example `/businessapps/environments/D365AITour005/query`. Never drop that prefix. A path without it is refused with `Access denied for GET path` or `Access denied for POST path`, even though the table and the request are correct. Use each path exactly as written in this skill or exactly as `search_paths` returns it.
 
 ## Do not stop early
 
@@ -82,34 +83,34 @@ Do not call `get_schema` or sample-query these tables to discover column names. 
 READ with the environment query action. This is the only read method to use for the tables in this skill:
 
 - Tool: `do_action`
-- `actionUrl`: the query operation path returned by `search_paths` (it ends in `/query` and lists the `action` operation). Use it exactly as returned. It is usually `environments/D365AITour005/query`.
+- `actionUrl`: the query operation path returned by `search_paths` (it ends in `/query` and lists the `action` operation). Use it exactly as returned. It is `/businessapps/environments/D365AITour005/query`.
 - `jsonBody`: `{"querytext": "SELECT ... FROM aitour_expansionrequest WHERE aitour_requestnumber = '<requestNumber>'"}`
 
 Use Dataverse logical table and column names, one SELECT, and an explicit column list or `SELECT *`. No subqueries, DISTINCT, HAVING, CASE, or CAST. JOINs on equality are allowed.
 
 Example for step 1: `SELECT aitour_expansionrequestid, aitour_name, aitour_estimatedbudget, aitour_requeststatus, aitour_servicecategory, aitour_targetdate FROM aitour_expansionrequest WHERE aitour_requestnumber = '<requestNumber>'`
 
-Do NOT use app-scoped table paths (anything under `environments/D365AITour005/apps/...`) to read these records. The Caldova Vendor Award app is wired to the cab tables, so that route leads to the wrong data. If a fetch returns no record data, use the query action above instead of switching to an app view.
+Do NOT use app-scoped table paths (anything under `/businessapps/environments/D365AITour005/apps/...`) to read these records. The Caldova Vendor Award app is wired to the cab tables, so that route leads to the wrong data. If a fetch returns no record data, use the query action above instead of switching to an app view.
 
 WRITE with `create_entity` and `update_entity` (verified working format):
 
 - Never call `get_schema` with a path that ends in `/records`. It returns "Schema not found: .../records". If you do need a schema for a table that is not listed in this skill, call `get_schema` on the table path without `/records`, and if that fails, continue with the columns you know instead of stopping.
 
-- Create: `parentUrl` is the `records` sub-path returned by a `fetch` of `environments/D365AITour005/tables/<logical table name>`, which is `environments/D365AITour005/tables/<logical table name>/records`. Fetch the table first. The table path alone, without `/records`, is rejected.
-- Update: `entityUrl` is `environments/D365AITour005/tables/<logical table name>/records/<record id>`.
+- Create: `parentUrl` is the `records` sub-path returned by a `fetch` of `/businessapps/environments/D365AITour005/tables/<logical table name>`, which is `/businessapps/environments/D365AITour005/tables/<logical table name>/records`. Fetch the table first. The table path alone, without `/records`, is rejected.
+- Update: `entityUrl` is `/businessapps/environments/D365AITour005/tables/<logical table name>/records/<record id>`.
 - `jsonBody` is a JSON object using logical column names as keys.
 - LOOKUP columns must be an object, never a bare GUID and never `@odata.bind`. Use `{"relatedTable": "<logical table name>", "recordId": "<guid>"}`. A bare GUID string fails with `JsonReaderException: Unexpected character encountered while parsing value: d. Path '', line 0, position 0`. That error means you sent a lookup as a plain string.
 - Choice columns are the integer value, for example `100000000`. Date-only columns are `"YYYY-MM-DD"`. Decimals are plain numbers with no commas or dollar signs.
 
 Verified example, step 5a (create the Draft award):
 
-`create_entity` with `parentUrl` = `environments/D365AITour005/tables/aitour_vendoraward/records` and `jsonBody`:
+`create_entity` with `parentUrl` = `/businessapps/environments/D365AITour005/tables/aitour_vendoraward/records` and `jsonBody`:
 
 `{"aitour_name": "<request name> Award", "aitour_awardnumber": "VA-2026-016", "aitour_awardstatus": 100000000, "aitour_scope": "<short scope>", "aitour_expansionrequestid": {"relatedTable": "aitour_expansionrequest", "recordId": "<expansion request id>"}, "aitour_selectedsupplierid": {"relatedTable": "aitour_supplier", "recordId": "<supplier id>"}}`
 
 Verified example, step 5b (finalize that record):
 
-`update_entity` with `entityUrl` = `environments/D365AITour005/tables/aitour_vendoraward/records/<vendor award id>` and `jsonBody`:
+`update_entity` with `entityUrl` = `/businessapps/environments/D365AITour005/tables/aitour_vendoraward/records/<vendor award id>` and `jsonBody`:
 
 `{"aitour_awardamount": 8930000, "aitour_effectivedate": "2027-05-31", "aitour_awarddate": "<today YYYY-MM-DD>", "aitour_awardstatus": 100000001}`
 
@@ -177,7 +178,7 @@ Stop. Make no writes. Do not finalize. End with status `Rejected by human approv
 
 Do these steps yourself with the data tools, in order.
 
-**5a. Create the Draft Vendor Award** (Recommend skill, "Create a draft Vendor Award"). Create one `aitour_vendoraward` record with the expansion request, the approved supplier, Award Status Draft, a name derived from the request name, a short scope derived from the request description, and the next available award number (query existing award numbers and add one to the highest). Leave Award Amount, Award Date, and Effective Date blank at creation. Do NOT call `get_schema` for this table. Everything you need is listed in this skill: Draft = 100000000, Awarded = 100000001, and the column names and lookup format are above. Before the create, call `fetch` ONCE on the table path `environments/D365AITour005/tables/aitour_vendoraward` and use the `records` sub-path it returns as the `parentUrl` for `create_entity`. This is how the platform presents the write path, and a create sent to a path you were not shown can be refused with `Access denied for POST path`. If the create is still refused with that error, report the exact error text and stop. Do not retry and do not switch to a different path or table.
+**5a. Create the Draft Vendor Award** (Recommend skill, "Create a draft Vendor Award"). Create one `aitour_vendoraward` record with the expansion request, the approved supplier, Award Status Draft, a name derived from the request name, a short scope derived from the request description, and the next available award number (query existing award numbers and add one to the highest). Leave Award Amount, Award Date, and Effective Date blank at creation. Do NOT call `get_schema` for this table. Everything you need is listed in this skill: Draft = 100000000, Awarded = 100000001, and the column names and lookup format are above. Before the create, call `fetch` ONCE on the table path `/businessapps/environments/D365AITour005/tables/aitour_vendoraward` and use the `records` sub-path it returns as the `parentUrl` for `create_entity`. This is how the platform presents the write path, and a create sent to a path you were not shown can be refused with `Access denied for POST path`. If the create is still refused with that error, report the exact error text and stop. Do not retry and do not switch to a different path or table.
 
 **5b. Finalize** (Finalize skill, "Finalize the award"). Update ONLY that Vendor Award record:
 
